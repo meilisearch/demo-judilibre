@@ -10,8 +10,11 @@ description: Every setting is an environment variable read from `.env` at the pr
 | `MEILI_URL` | `http://localhost:7700` | URL used by the indexer and the web server |
 | `NEXT_PUBLIC_MEILI_URL` | `http://localhost:7700` | URL the **browser** uses for search-as-you-type |
 | `MEILI_MASTER_KEY` | `judilibre-demo-master-key` | Master key (self-hosted, compose passes it to Meilisearch) or Default Admin API Key (Meilisearch Cloud) |
-| `MEILI_SEARCH_KEY` (or `NEXT_PUBLIC_MEILI_SEARCH_KEY`) | – | Optional search-only key given to the browser; otherwise resolved through `MEILI_MASTER_KEY` |
+| `MEILI_SEARCH_KEY` (or `NEXT_PUBLIC_MEILI_SEARCH_KEY`) | – | Search-only key given to the browser. It must reach both indexes; otherwise resolved through `MEILI_MASTER_KEY` |
+| `MEILI_DOCUMENTS_KEY` | – | Server-side key with `search` + `documents.get`, used to read one decision. Lets a deployment run with no admin key |
 | `MEILI_INDEX` | `decisions` | Index uid |
+| `MEILI_CHUNK_INDEX` | `<index>_chunk` | Passage index uid |
+| `MEILI_EMBEDDER` | `voyage` | Embedder name on both indexes; empty hides the hybrid-search toggle |
 
 ## Judilibre
 
@@ -45,3 +48,25 @@ description: Every setting is an environment variable read from `.env` at the pr
 <Warning>
 Empty values (`KEY=`) are treated as unset by the indexer, so you can keep the placeholders from `.env.example`.
 </Warning>
+
+## Deploying the web app
+
+Only the web app is deployed; the indexer runs wherever you like. The deployed app needs **no admin key**: it reads decisions with `MEILI_DOCUMENTS_KEY` and hands `MEILI_SEARCH_KEY` to the browser.
+
+```bash
+cd web
+vercel link --project <name>
+vercel deploy --prod
+```
+
+Set these on the hosting platform: `MEILI_URL`, `NEXT_PUBLIC_MEILI_URL`, `MEILI_SEARCH_KEY`, `MEILI_DOCUMENTS_KEY`, `MEILI_CHAT_KEY`, `MEILI_INDEX`, `MEILI_CHUNK_INDEX`, `MEILI_EMBEDDER`, `CHAT_WORKSPACE`, `CHAT_MODEL`.
+
+Create the two scoped keys once, with your admin key:
+
+```bash
+curl -X POST "$MEILI_URL/keys" -H "Authorization: Bearer $MEILI_MASTER_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"web documents","actions":["search","documents.get"],"indexes":["judilibre","judilibre_chunk"],"expiresAt":null}'
+```
+
+`MEILI_CHAT_KEY` needs `search` + `chatCompletions` on both indexes; `indexer setup` prints a suitable one.

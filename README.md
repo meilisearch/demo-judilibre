@@ -69,6 +69,16 @@ cargo run -- index --updated --date-start 2025-01-01   # incremental sync: decis
 - `/chat` streaming assistant. `/api/chat` proxies to Meilisearch `POST /chats/{workspace}/chat/completions`; search steps and retrieved decisions are rendered as sources.
 - `/decision/[id]` full decision: sommaire, titrage, textes appliqués, documents associés, rapprochements, texte intégral, and the text extracted from each attached PDF.
 
+## Deploy
+
+Only `web/` is deployed. The deployed app runs on two scoped Meilisearch keys and **no admin key**: a search-only key for the browser and a `documents.get` key for the decision page.
+
+```bash
+cd web && vercel deploy --prod
+```
+
+Live demo: <https://demo-judilibre.vercel.app>
+
 ## Docs
 
 Mintlify documentation lives in `docs/` (`mintlify dev` inside that folder). The web API is described in `docs/openapi.yaml`.
