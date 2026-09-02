@@ -1,6 +1,6 @@
 "use client";
 
-import { Quote, ScrollText, Search, Sparkles, X } from "lucide-react";
+import { Search, Sparkles, X } from "lucide-react";
 import {
   InputGroup,
   InputGroupAddon,
@@ -10,10 +10,9 @@ import {
 } from "@/components/ui/input-group";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatCount } from "@/lib/format";
-import { type SearchScope, useSearchStore } from "@/lib/search-store";
+import { useSearchStore } from "@/lib/search-store";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -22,12 +21,10 @@ interface Props {
   isFetching: boolean;
   /** Semantic search is available on the index being queried. */
   aiAvailable: boolean;
-  /** Passages are indexed, so the scope switch is meaningful. */
-  hasPassages: boolean;
 }
 
-export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable, hasPassages }: Props) {
-  const { query, setQuery, mode, setMode, scope, setScope } = useSearchStore();
+export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable }: Props) {
+  const { query, setQuery, mode, setMode, modePinned, scope } = useSearchStore();
   const aiOn = mode === "hybrid";
 
   return (
@@ -91,7 +88,9 @@ export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable
                 />
                 <TooltipContent>
                   {aiOn
-                    ? "Recherche hybride active : mots-clés + sens (embeddings Voyage AI). Cliquez pour revenir aux mots-clés."
+                    ? modePinned
+                      ? "Recherche hybride active : mots-clés + sens (embeddings Voyage AI). Cliquez pour revenir aux mots-clés."
+                      : "Recherche hybride activée automatiquement : votre requête ressemble à une question. Cliquez pour revenir aux mots-clés."
                     : "Activer la recherche hybride : combine les mots-clés et le sens de la question."}
                 </TooltipContent>
               </Tooltip>
@@ -99,29 +98,6 @@ export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable
           ) : null}
         </InputGroupAddon>
       </InputGroup>
-
-      {hasPassages ? (
-        <ToggleGroup
-          value={[scope]}
-          onValueChange={(v: string[]) => {
-            const next = v.at(-1) as SearchScope | undefined;
-            if (next) setScope(next);
-          }}
-          variant="outline"
-          size="sm"
-          aria-label="Portée de la recherche"
-          className="self-start"
-        >
-          <ToggleGroupItem value="decisions">
-            <ScrollText data-icon="inline-start" />
-            Décisions
-          </ToggleGroupItem>
-          <ToggleGroupItem value="passages">
-            <Quote data-icon="inline-start" />
-            Passages
-          </ToggleGroupItem>
-        </ToggleGroup>
-      ) : null}
     </section>
   );
 }

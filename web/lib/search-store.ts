@@ -6,6 +6,20 @@ export type SearchMode = "keyword" | "hybrid";
 /** Search whole decisions, or the passages extracted from them and their PDFs. */
 export type SearchScope = "decisions" | "passages";
 
+/** Above this many words, a query reads as a sentence rather than a set of keywords. */
+const NATURAL_LANGUAGE_WORDS = 5;
+
+/**
+ * A question, or a query long enough to be a sentence, is better served by hybrid search:
+ * the wording rarely matches the decision's own words.
+ */
+export function looksNaturalLanguage(query: string): boolean {
+  const q = query.trim();
+  if (!q) return false;
+  if (q.includes("?")) return true;
+  return q.split(/\s+/).length > NATURAL_LANGUAGE_WORDS;
+}
+
 /** Weight of the semantic side in hybrid search (0 = keyword only, 1 = vectors only). */
 export const HYBRID_SEMANTIC_RATIO = 0.6;
 
@@ -16,6 +30,8 @@ interface SearchState {
   filters: Filters;
   sort: SortOption;
   mode: SearchMode;
+  /** The user set the mode by hand, so typing no longer changes it. */
+  modePinned: boolean;
   scope: SearchScope;
   page: number;
   setQuery: (q: string) => void;
@@ -32,10 +48,16 @@ export const useSearchStore = create<SearchState>((set) => ({
   filters: {},
   sort: "relevance",
   mode: "keyword",
+  modePinned: false,
   scope: "decisions",
   page: 1,
-  setQuery: (query) => set({ query, page: 1 }),
-  setMode: (mode) => set({ mode, page: 1 }),
+  setQuery: (query) =>
+    set((state) => ({
+      query,
+      page: 1,
+      mode: state.modePinned ? state.mode : looksNaturalLanguage(query) ? "hybrid" : "keyword",
+    })),
+  setMode: (mode) => set({ mode, modePinned: true, page: 1 }),
   setScope: (scope) => set({ scope, page: 1 }),
   toggleFilter: (attr, value) =>
     set((state) => {

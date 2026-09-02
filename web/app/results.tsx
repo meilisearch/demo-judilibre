@@ -1,11 +1,12 @@
 "use client";
 
-import { ArrowDownWideNarrow, ChevronLeft, ChevronRight, FileSearch } from "lucide-react";
+import { ArrowDownWideNarrow, ChevronLeft, ChevronRight, FileSearch, Quote, ScrollText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { type SortOption, useSearchStore } from "@/lib/search-store";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { type SearchScope, type SortOption, useSearchStore } from "@/lib/search-store";
 import { HitCard } from "@/app/hit-card";
 import { PassageCard } from "@/app/passage-card";
 import { HITS_PER_PAGE, type SearchResult } from "@/app/search-page";
@@ -22,32 +23,57 @@ const SORT_LABELS: Record<SortOption, string> = {
 };
 
 export function Results({ result, loading }: Props) {
-  const { sort, setSort, scope, page, setPage, query, filters } = useSearchStore();
+  const { sort, setSort, scope, setScope, page, setPage, query, filters } = useSearchStore();
   const hasCriteria = query.trim().length > 0 || Object.keys(filters).length > 0;
 
   return (
     <section aria-label="Résultats" className="flex min-w-0 flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-muted-foreground text-xs">
-          {result && result.totalPages > 0 ? `Page ${page} sur ${result.totalPages}` : " "}
-        </p>
-        <Select value={sort} onValueChange={(v: string | null) => {
-            if (v) setSort(v as SortOption);
-          }}>
-          <SelectTrigger size="sm" aria-label="Trier les résultats" className="min-w-[9.5rem]">
-            <ArrowDownWideNarrow />
-            <SelectValue>{SORT_LABELS[sort]}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {(Object.keys(SORT_LABELS) as SortOption[]).map((option) => (
-                <SelectItem key={option} value={option}>
-                  {SORT_LABELS[option]}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        {result?.hasPassages ? (
+          <ToggleGroup
+            value={[scope]}
+            onValueChange={(v: string[]) => {
+              const next = v.at(-1) as SearchScope | undefined;
+              if (next) setScope(next);
+            }}
+            variant="outline"
+            size="sm"
+            aria-label="Portée de la recherche"
+          >
+            <ToggleGroupItem value="decisions">
+              <ScrollText data-icon="inline-start" />
+              Décisions
+            </ToggleGroupItem>
+            <ToggleGroupItem value="passages">
+              <Quote data-icon="inline-start" />
+              Passages
+            </ToggleGroupItem>
+          </ToggleGroup>
+        ) : (
+          <span />
+        )}
+        <div className="flex items-center gap-3">
+          <p className="text-muted-foreground text-xs">
+            {result && result.totalPages > 0 ? `Page ${page} sur ${result.totalPages}` : " "}
+          </p>
+          <Select value={sort} onValueChange={(v: string | null) => {
+              if (v) setSort(v as SortOption);
+            }}>
+            <SelectTrigger size="sm" aria-label="Trier les résultats" className="min-w-[9.5rem]">
+              <ArrowDownWideNarrow />
+              <SelectValue>{SORT_LABELS[sort]}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {(Object.keys(SORT_LABELS) as SortOption[]).map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {SORT_LABELS[option]}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {loading && !result ? (
