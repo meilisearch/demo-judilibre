@@ -1,0 +1,47 @@
+---
+title: Configuration
+description: Every setting is an environment variable read from `.env` at the project root.
+---
+
+## Meilisearch
+
+| Variable | Default | Description |
+|---|---|---|
+| `MEILI_URL` | `http://localhost:7700` | URL used by the indexer and the web server |
+| `NEXT_PUBLIC_MEILI_URL` | `http://localhost:7700` | URL the **browser** uses for search-as-you-type |
+| `MEILI_MASTER_KEY` | `judilibre-demo-master-key` | Master key (self-hosted, compose passes it to Meilisearch) or Default Admin API Key (Meilisearch Cloud) |
+| `MEILI_SEARCH_KEY` (or `NEXT_PUBLIC_MEILI_SEARCH_KEY`) | – | Optional search-only key given to the browser; otherwise resolved through `MEILI_MASTER_KEY` |
+| `MEILI_INDEX` | `decisions` | Index uid |
+
+## Judilibre
+
+| Variable | Default | Description |
+|---|---|---|
+| `PISTE_KEY_ID` | – | Application KeyId (PISTE "API key" application) |
+| `PISTE_CLIENT_ID` / `PISTE_CLIENT_SECRET` | – | Alternative for PISTE "OAuth" applications (client-credentials, `Authorization: Bearer`) |
+| `PISTE_OAUTH_URL` | production token URL | `https://sandbox-oauth.piste.gouv.fr/api/oauth/token` for the sandbox |
+| `JUDILIBRE_API_URL` | production URL | Use `https://sandbox-api.piste.gouv.fr/cassation/judilibre/v1.0` for the sandbox |
+| `DATE_START` | `2023-01-01` | First decision date exported |
+| `JURISDICTIONS` | `cc` | Comma-separated: `cc` (Cour de cassation), `ca` (cours d'appel), `tj`, `tcom` |
+
+## Chat
+
+| Variable | Default | Description |
+|---|---|---|
+| `CHAT_SOURCE` | `openAi` | `openAi`, `mistral`, `azureOpenAi`, `vLlm`, `gemini` |
+| `CHAT_API_KEY` | – | Provider API key, stored in the Meilisearch chat workspace |
+| `CHAT_BASE_URL` | – | Required for `mistral` (`https://api.mistral.ai/v1`), `vLlm`, `azureOpenAi` |
+| `CHAT_MODEL` | `gpt-5.6-luna` | Model name sent by the web app (OpenAI GPT-5.6 Luna; e.g. `mistral-large-latest` with Mistral) |
+| `CHAT_WORKSPACE` | `judilibre` | Meilisearch chat workspace |
+| `MEILI_CHAT_KEY` | – | Key with `search` + `chatCompletions` actions, printed by `setup`. Falls back to the master key |
+
+## Hybrid search with Voyage AI (optional)
+
+| Variable | Default | Description |
+|---|---|---|
+| `VOYAGE_API_KEY` | – | Voyage AI key; when set, `setup` configures a REST embedder named `voyage`, the search page shows a **Hybride** toggle and chat retrieval becomes hybrid |
+| `VOYAGE_MODEL` | `voyage-law-2` | Legal-domain model (1024 dims, 16K context). `voyage-4` / `voyage-4-large` are the general multilingual models |
+
+<Warning>
+Empty values (`KEY=`) are treated as unset by the indexer, so you can keep the placeholders from `.env.example`.
+</Warning>

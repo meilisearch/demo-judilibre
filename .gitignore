@@ -1,0 +1,22 @@
+# Secrets — the demo's keys live here and must never be committed.
+.env
+.env.local
+.env.*.local
+
+# Rust
+indexer/target/
+
+# Node / Next.js
+node_modules/
+web/.next/
+web/out/
+web/next-env.d.ts
+web/.vercel/
+.pnpm-store/
+
+# OS / editors
+.DS_Store
+*.swp
+
+# Local tooling
+.claude/settings.local.json

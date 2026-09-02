@@ -1,0 +1,37 @@
+---
+title: Quickstart
+description: From zero to a searchable corpus in a few minutes.
+---
+
+<Steps>
+  <Step title="Get a PISTE KeyId">
+    Create an account on [piste.gouv.fr](https://piste.gouv.fr), create an application, then open the **APIs** tab of the application and subscribe it to **Judilibre** for the environment you will call (sandbox and/or production, each has its own terms of use to accept). Copy the application's `KeyId` (API-key application) or its OAuth client id and secret.
+
+    <Note>A `403` from `api.piste.gouv.fr` means the key exists but the application is not subscribed to Judilibre in production; a `400` from the sandbox means the key is not valid there.</Note>
+  </Step>
+  <Step title="Configure the environment">
+    ```bash
+    cp .env.example .env
+    ```
+    Fill `PISTE_KEY_ID`, and `CHAT_API_KEY` if you want the assistant. See [Configuration](/configuration).
+  </Step>
+  <Step title="Start Meilisearch">
+    ```bash
+    docker compose up -d meilisearch
+    ```
+  </Step>
+  <Step title="Create the index and import decisions">
+    ```bash
+    cd indexer
+    cargo run --release -- setup
+    cargo run --release -- index --limit 3000
+    ```
+    The indexer starts with the most recent Cour de cassation decisions. Drop `--limit` to import the whole period defined by `DATE_START`.
+  </Step>
+  <Step title="Run the web app">
+    ```bash
+    cd web && pnpm install && pnpm dev
+    ```
+    Open [http://localhost:3000](http://localhost:3000). Alternatively run everything in Docker with `docker compose watch`.
+  </Step>
+</Steps>

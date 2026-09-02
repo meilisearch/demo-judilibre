@@ -1,0 +1,67 @@
+services:
+  meilisearch:
+    image: getmeili/meilisearch:v1.53.1
+    ports:
+      - "7700:7700"
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-judilibre-demo-master-key}
+      MEILI_ENV: development
+      MEILI_HTTP_PAYLOAD_SIZE_LIMIT: 200Mb
+    volumes:
+      - meili_data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:7700/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      WATCHPACK_POLLING: "true"
+      MEILI_URL: http://meilisearch:7700
+      # URL the browser uses to reach Meilisearch directly for search-as-you-type.
+      NEXT_PUBLIC_MEILI_URL: ${NEXT_PUBLIC_MEILI_URL:-http://localhost:7700}
+    depends_on:
+      meilisearch:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: sync
+          path: ./web/app
+          target: /app/app
+        - action: sync
+          path: ./web/components
+          target: /app/components
+        - action: sync
+          path: ./web/lib
+          target: /app/lib
+        - action: sync
+          path: ./web/public
+          target: /app/public
+        - action: rebuild
+          path: ./web/package.json
+
+  # One-shot indexer: `docker compose run --rm indexer setup` / `... indexer index --limit 2000`
+  indexer:
+    build:
+      context: ./indexer
+    profiles: ["tools"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MEILI_URL: http://meilisearch:7700
+    depends_on:
+      meilisearch:
+        condition: service_healthy
+
+volumes:
+  meili_data:

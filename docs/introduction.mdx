@@ -1,0 +1,27 @@
+---
+title: Introduction
+description: French case law from the Cour de cassation, searchable and chat-ready with Meilisearch.
+---
+
+This project indexes decisions from **Judilibre**, the open-data platform of the French Cour de cassation, into **Meilisearch**, and ships a web UI to search them instantly and to ask questions to an assistant grounded in the decisions.
+
+## Components
+
+<CardGroup cols={3}>
+  <Card title="Indexer" icon="gears" href="/indexing">
+    Rust CLI that exports decisions from the Judilibre API and pushes them into Meilisearch with tuned settings.
+  </Card>
+  <Card title="Search UI" icon="magnifying-glass" href="/search">
+    Next.js app with search-as-you-type, facets and highlighted matches, talking to Meilisearch directly.
+  </Card>
+  <Card title="Assistant" icon="comments" href="/chat">
+    Streaming chat that uses Meilisearch chat completions to retrieve and cite decisions.
+  </Card>
+</CardGroup>
+
+## Data source
+
+Judilibre is exposed through the state API gateway **PISTE**. Access is free but requires an account and an application key (`KeyId`). Decisions are pseudonymised and published under the Licence Ouverte 2.0.
+
+- Dataset page: [data.gouv.fr/datasets/api-judilibre](https://www.data.gouv.fr/datasets/api-judilibre)
+- API source and OpenAPI spec: [Cour-de-cassation/judilibre-search](https://github.com/Cour-de-cassation/judilibre-search)

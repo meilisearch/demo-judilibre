@@ -1,0 +1,35 @@
+---
+title: Search UI
+description: Search-as-you-type straight from the browser.
+---
+
+The search page (`/`) is a client component that queries Meilisearch directly with `meilisearch-js`. It never sees the master key: `GET /api/config` returns the public Meilisearch URL and the default **search-only** API key.
+
+## Scope and modes
+
+The **Décisions / Passages** switch above the filters chooses the index: `judilibre` (one hit per decision) or `judilibre_chunk` (one best passage per decision, thanks to `distinctAttribute`). The **IA** button on the right of the search field turns on hybrid search (`semanticRatio: 0.6`) using the Voyage embedder; it only appears when an embedder is configured on the index being queried.
+
+## Query
+
+Each keystroke runs one `search` call with:
+
+- `facets`: chamber, solution, publication, type, year, formation, themes
+- `attributesToHighlight`: summary, titles, themes, number, text (with plain-text markers rendered as `<mark>` by React, never `innerHTML`)
+- `attributesToCrop: ["text"]` so a snippet from the full text appears when the match is only in the body
+- `filter`: one clause per facet (`OR` inside a facet, `AND` across facets)
+- `sort`: relevance, `decision_timestamp:desc` or `decision_timestamp:asc`
+- `hitsPerPage: 10` with `page` for exhaustive pagination
+
+State (query, filters, sort, scope, mode, page) lives in a Zustand store; fetching goes through TanStack Query with `keepPreviousData` so results never flash.
+
+Passage hits render as quotations with the decision's citation, the passage position (`passage 7 / 23`) and a badge saying whether the text comes from the decision itself or from an attached document.
+
+The search key handed to the browser must reach both indexes. `/api/config` verifies that `MEILI_SEARCH_KEY` covers them and otherwise picks a broader search-only key from `/keys`.
+
+## Result card
+
+Each card mirrors a Bulletin entry: chamber and date in monospace, the *titrage* as a serif title, the *sommaire*, then badges for solution and publication. A star marks decisions Judilibre flags as of particular interest.
+
+## Decision page
+
+`/decision/[id]` is a server component fetching the document from Meilisearch and rendering sommaire, matières, texte intégral, textes appliqués, documents associés and rapprochements.

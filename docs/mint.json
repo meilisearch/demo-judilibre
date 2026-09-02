@@ -1,0 +1,28 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Judilibre × Meilisearch",
+  "colors": {
+    "primary": "#2B3A7A",
+    "light": "#8B98D6",
+    "dark": "#1E2A5E"
+  },
+  "favicon": "/favicon.svg",
+  "topbarLinks": [
+    { "name": "Judilibre (data.gouv.fr)", "url": "https://www.data.gouv.fr/datasets/api-judilibre" }
+  ],
+  "navigation": [
+    {
+      "group": "Getting started",
+      "pages": ["introduction", "quickstart", "configuration"]
+    },
+    {
+      "group": "Guides",
+      "pages": ["indexing", "search", "chat"]
+    },
+    {
+      "group": "Web API",
+      "pages": ["api-reference/config", "api-reference/chat"]
+    }
+  ],
+  "openapi": "openapi.yaml"
+}

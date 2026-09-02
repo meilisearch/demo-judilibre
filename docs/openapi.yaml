@@ -1,0 +1,98 @@
+openapi: 3.1.0
+info:
+  title: Judilibre × Meilisearch web API
+  version: 0.1.0
+  description: |
+    Small server-side API exposed by the Next.js app. Search itself goes straight from the
+    browser to Meilisearch using the search-only key returned by `/api/config`.
+servers:
+  - url: http://localhost:3000
+paths:
+  /api/config:
+    get:
+      operationId: getConfig
+      summary: Public Meilisearch connection details
+      description: Returns the browser-facing Meilisearch URL, a search-only API key and the index uid.
+      responses:
+        "200":
+          description: Connection details
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [host, apiKey, index]
+                properties:
+                  host: { type: string, example: http://localhost:7700 }
+                  apiKey: { type: string, description: Search-only API key }
+                  index: { type: string, example: decisions }
+        "503":
+          description: Meilisearch is unreachable or has no search key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/chat:
+    post:
+      operationId: chat
+      summary: Stream an assistant answer
+      description: |
+        Proxies to Meilisearch `POST /chats/{workspace}/chat/completions` and streams the
+        OpenAI-compatible SSE response back unchanged. Tool calls named `_meiliSearchProgress`,
+        `_meiliSearchSources` and `_meiliAppendConversationMessage` carry search steps, sources
+        and conversation memory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages]
+              properties:
+                messages:
+                  type: array
+                  description: Full conversation history, including internal messages returned by earlier turns.
+                  items:
+                    $ref: "#/components/schemas/ChatMessage"
+      responses:
+        "200":
+          description: Server-sent events (`data: {json}` lines, ending with `data: [DONE]`)
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "400":
+          description: Invalid body
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: Chat not configured in Meilisearch
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+components:
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        detail: { type: string }
+    ChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role: { type: string, enum: [system, user, assistant, tool] }
+        content: { type: [string, "null"] }
+        tool_calls:
+          type: [array, "null"]
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              type: { type: string, enum: [function] }
+              function:
+                type: object
+                properties:
+                  name: { type: string }
+                  arguments: { type: string }
+        tool_call_id: { type: [string, "null"] }

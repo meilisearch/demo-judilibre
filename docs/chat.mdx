@@ -1,0 +1,37 @@
+---
+title: Assistant
+description: Conversational search with Meilisearch chat completions.
+---
+
+Meilisearch's chat completions endpoint runs the retrieval loop itself: the LLM decides what to search, Meilisearch executes the search on the `decisions` index, and the answer is streamed back as OpenAI-compatible server-sent events.
+
+## Setup performed by the indexer
+
+1. Enables the `chatCompletions` experimental feature.
+2. `PATCH /chats/judilibre/settings` with the provider (`CHAT_SOURCE`), the API key, and French prompts describing when and how to search (`searchDescription`, `searchQParam`, `searchFilterParam`).
+3. `PATCH /indexes/{index}/settings/chat` on **both** indexes, each with its own description and Liquid `documentTemplate`: whole decisions for `judilibre`, and passages for `judilibre_chunk` (a passage template names the attached document when the text comes from a PDF). Hybrid search is enabled on both when the Voyage embedder is configured.
+
+The system prompt tells the assistant to prefer the passage index when it needs to quote a precise motif, and to present passages taken from attached documents (communiqués, rapports, avis) as such rather than as the wording of the ruling.
+
+<Warning>
+The GPT-5.6 family (`gpt-5.6-luna`, `-sol`, `-terra`) **cannot** be used here. Those models reject function tools on `/v1/chat/completions` unless `reasoning_effort` is `"none"`, and Meilisearch only accepts `low`, `medium` or `high`. Since Meilisearch always sends its internal search tool, every request fails. The default is therefore `gpt-5.5`; `gpt-5.4-mini` is the cheaper, faster option.
+</Warning>
+
+## Request flow
+
+```
+browser ──POST /api/chat {messages}──▶ Next.js route ──POST /chats/judilibre/chat/completions──▶ Meilisearch ──▶ LLM
+        ◀────────── SSE passthrough ────────────────◀────────────── SSE ──────────────────────◀
+```
+
+The route declares the three Meilisearch tools so the stream contains:
+
+- `_meiliSearchProgress`: the query, filter and index the model chose. Its arguments carry `function_arguments` (a JSON string), rendered as a single live line that is rewritten on each search, then collapsed into an expandable trace.
+- `_meiliSearchSources`: the retrieved documents, under the `sources` key. Rendered as numbered sources linking to `/decision/[id]`; a passage links to its parent decision through `decision_id`. Sources arrive as whole index documents, so the client keeps only the fields it displays.
+- `_meiliAppendConversationMessage`: internal messages the client must keep and send back with the next turn
+
+The endpoint is stateless, so the client keeps the whole history including those internal messages.
+
+## System prompt
+
+The assistant answers in French, cites decisions in the conventional form (« Cass. soc., 12 janvier 2024, n° 22-10.123 »), says when the retrieved decisions do not answer the question, and reminds users that the answer is informative rather than legal advice.

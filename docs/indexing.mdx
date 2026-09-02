@@ -1,0 +1,65 @@
+---
+title: Indexing
+description: How the Rust indexer exports Judilibre and shapes documents for Meilisearch.
+---
+
+## Commands
+
+```bash
+cargo run -- setup [--no-chat]
+cargo run -- index [--date-start YYYY-MM-DD] [--date-end YYYY-MM-DD] [--jurisdiction cc,ca] [--publication b] \
+                   [--with-files] [--no-chunks] [--limit N] [--batch-size 500] [--delay-ms 250] [--updated]
+```
+
+`setup` creates both indexes (`judilibre` and `judilibre_chunk`), applies their settings, configures the optional Voyage embedder and the chat workspace. It is idempotent.
+
+Corpus sizes are worth knowing before a full run: for the Cour de cassation between 2024 and today, Judilibre holds about 42 000 decisions, of which roughly 3 000 are published at the Bulletin. `--publication b` selects that richer subset.
+
+`index` calls Judilibre `GET /export` with `resolve_references=true` so that chamber, formation, publication and solution are human-readable labels, then pushes documents to Meilisearch in ~20 MB batches.
+
+## Windowing
+
+The export endpoint cannot page past 10 000 results for one query. The indexer slices the period into month windows (most recent first) and recursively splits any window whose `total` exceeds the cap, down to a single day.
+
+Judilibre returns `429` when throttled; the indexer backs off exponentially. Tune `--delay-ms` to stay within your PISTE quota.
+
+## Incremental sync
+
+`--updated` switches `date_type` to `update`, exporting decisions modified since `--date-start`. Decisions flagged `to_be_deleted` are removed from the index, as required by the Judilibre terms of use.
+
+## Document shape
+
+| Field | Notes |
+|---|---|
+| `id` | Judilibre id, Meilisearch primary key |
+| `jurisdiction`, `chamber`, `formation`, `type`, `solution`, `publication[]` | Labels (facets) |
+| `number`, `numbers[]`, `ecli` | Identifiers, typo tolerance disabled |
+| `decision_date`, `decision_timestamp`, `year` | Date as ISO string, unix seconds (sort/filter) and year (facet) |
+| `titles[]`, `summary`, `themes[]` | Titrage and sommaire from the Cour de cassation |
+| `visa[]` | Applied legal texts |
+| `excerpt` | Motivations + dispositif (max 6 000 chars), used in the chat document template |
+| `text`, `text_length` | Full pseudonymised text |
+| `files[]` | Associated documents: name, type, url, plus `content` (extracted text), `pages` and `pdf_type` with `--with-files` |
+| `rapprochements[]` | Related case law |
+| `particular_interest`, `location`, `bulletin`, `url` | Misc |
+
+## Index settings
+
+- Searchable: `number, numbers, ecli, titles, summary, themes, visa, excerpt, text`
+- Filterable: `jurisdiction, chamber, formation, publication, type, solution, themes, year, decision_timestamp, particular_interest, location`
+- Sortable: `decision_timestamp`
+- French stop words, `maxValuesPerFacet: 200`, `maxTotalHits: 10000`
+
+## Attached PDFs
+
+`--with-files` downloads every `files[].url` and extracts its text with the `pdf-inspector` crate (in-memory, no OCR, on a blocking thread). Extraction cleans the Markdown it returns: heading and emphasis markers are dropped, and letter-spaced headings that extract as doubled glyphs ("COOMMMMUUNNIIQQUUÉÉ") are halved back to "COMMUNIQUÉ". Text is capped at 40 000 characters per file. Failures are logged and never abort the run; a scanned PDF simply yields no text.
+
+## Passage index
+
+Every decision is also split into ~2 000-character passages with 200 characters of overlap, preferring paragraph then sentence boundaries. The text of each attached PDF is chunked the same way. Passages land in `judilibre_chunk` with `id` = `<decision id>_<n>`, the `decision_id`, `source` (`decision` or `attachment`), the attachment name and type, and the parent decision's citation metadata for filtering. The index sets `distinctAttribute: decision_id`, so a passage search returns one best passage per decision.
+
+## Embedder (Voyage AI)
+
+With `VOYAGE_API_KEY` set, `setup` adds a `rest` embedder called `voyage` to **both** indexes, pointing at `https://api.voyageai.com/v1/embeddings`. Meilisearch batches inputs (`"input": ["{{text}}", "{{..}}"]`) and reads `data[].embedding` back. On the decision index the embedded text is the citation line, titrage, sommaire and the start of the motivations; on the passage index it is the citation line plus the passage. Embeddings are computed at indexing time, so run `setup` before `index` to avoid a re-embedding pass.
+
+The default model is `voyage-law-2` (legal domain, 1024 dimensions, 16K context). `voyage-4` and `voyage-4-large` are the general multilingual alternatives.
