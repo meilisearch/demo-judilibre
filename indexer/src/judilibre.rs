@@ -267,6 +267,9 @@ pub fn split_window(start: NaiveDate, end: NaiveDate) -> Option<((NaiveDate, Nai
 /// Everything `run_export` needs besides the clients.
 pub struct ExportPlan<'a> {
     pub targets: &'a Targets,
+    /// When set, decisions are written as JSON Lines to this file instead of
+    /// being pushed to Meilisearch. Re-indexing then needs no Judilibre call.
+    pub out: Option<&'a std::path::Path>,
     pub query: &'a ExportQuery,
     pub start: NaiveDate,
     pub end: NaiveDate,
@@ -281,7 +284,21 @@ pub async fn run_export(
     meili: &MeiliClient,
     plan: &ExportPlan<'_>,
 ) -> Result<ExportStats> {
-    let ExportPlan { targets, query, start, end, limit, attachments } = *plan;
+    let ExportPlan { targets, out, query, start, end, limit, attachments } = *plan;
+
+    // Local dump: one decision per line, nothing sent to Meilisearch.
+    let mut dump = match out {
+        Some(path) => {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+            }
+            info!(path = %path.display(), "writing decisions to disk");
+            Some(std::io::BufWriter::new(
+                std::fs::File::create(path).with_context(|| format!("creating {}", path.display()))?,
+            ))
+        }
+        None => None,
+    };
     let mut stats = ExportStats::default();
     let mut buffer = Buffer::default();
     let mut last_task: Option<u64> = None;
@@ -343,6 +360,21 @@ pub async fn run_export(
                         debug!(id = %doc.id, files = doc.files.len(), chars, "attachment text added");
                     }
                 }
+                if let Some(w) = dump.as_mut() {
+                    use std::io::Write;
+                    serde_json::to_writer(&mut *w, &doc).context("writing decision to the dump")?;
+                    w.write_all(b"\n").context("writing to the dump")?;
+                    stats.indexed += 1;
+                    if stats.indexed % 5_000 == 0 {
+                        info!(written = stats.indexed, "decisions written to disk");
+                    }
+                    if limit.is_some_and(|l| stats.indexed >= l) {
+                        info!(limit = stats.indexed, "reached --limit");
+                        break 'windows;
+                    }
+                    continue;
+                }
+
                 if targets.chunk_index.is_some() {
                     let chunks = chunk_document(&doc);
                     stats.chunks += chunks.len();
@@ -369,6 +401,72 @@ pub async fn run_export(
                 break;
             }
             batch_no += 1;
+        }
+    }
+
+    if let Some(mut w) = dump {
+        use std::io::Write;
+        w.flush().context("flushing the dump")?;
+        return Ok(stats);
+    }
+
+    if let Some(task) = buffer.flush(meili, targets).await? {
+        last_task = Some(task);
+    }
+    if let Some(task) = last_task {
+        info!(task, "waiting for Meilisearch to finish indexing");
+        meili.wait_for_task(task).await?;
+    }
+    Ok(stats)
+}
+
+/// Index decisions from local JSON Lines files produced by `--out`.
+pub async fn load_from_files(
+    meili: &MeiliClient,
+    targets: &Targets,
+    paths: &[std::path::PathBuf],
+    limit: Option<usize>,
+) -> Result<ExportStats> {
+    use std::io::BufRead;
+
+    let mut stats = ExportStats::default();
+    let mut buffer = Buffer::default();
+    let mut last_task: Option<u64> = None;
+    let mut seen: HashSet<String> = HashSet::new();
+
+    'files: for path in paths {
+        let file = std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
+        info!(path = %path.display(), "loading decisions from disk");
+        for (n, line) in std::io::BufReader::new(file).lines().enumerate() {
+            let line = line.with_context(|| format!("reading {}", path.display()))?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            let doc: Document = serde_json::from_str(&line)
+                .with_context(|| format!("{}:{}: malformed decision", path.display(), n + 1))?;
+            if doc.id.is_empty() || !seen.insert(doc.id.clone()) {
+                continue;
+            }
+            if targets.chunk_index.is_some() {
+                let chunks = chunk_document(&doc);
+                stats.chunks += chunks.len();
+                for c in chunks {
+                    buffer.chunk_bytes += c.approx_size();
+                    buffer.chunks.push(c);
+                }
+            }
+            buffer.doc_bytes += doc.approx_size();
+            buffer.docs.push(doc);
+            stats.indexed += 1;
+
+            if let Some(task) = buffer.flush_if_full(meili, targets).await? {
+                last_task = Some(task);
+                info!(sent = stats.indexed, chunks = stats.chunks, "batch queued in Meilisearch");
+            }
+            if limit.is_some_and(|l| stats.indexed >= l) {
+                info!(limit = stats.indexed, "reached --limit");
+                break 'files;
+            }
         }
     }
 

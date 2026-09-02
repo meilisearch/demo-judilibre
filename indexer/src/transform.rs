@@ -1,13 +1,14 @@
 //! Convert a raw Judilibre decision (JSON) into the Meilisearch document shape.
 
 use chrono::NaiveDate;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Maximum characters kept for the "motivations" excerpt used by the chat.
 const EXCERPT_MAX_CHARS: usize = 6_000;
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct Document {
     pub id: String,
     pub jurisdiction: String,
@@ -41,7 +42,8 @@ pub struct Document {
     pub url: String,
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct FileLink {
     pub name: String,
     #[serde(rename = "type")]
@@ -55,7 +57,8 @@ pub struct FileLink {
     pub pdf_type: String,
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct DecisionLink {
     pub title: String,
     pub number: String,
@@ -392,6 +395,15 @@ mod tests {
         assert_eq!(strip_html("a &amp; b"), "a & b");
         assert_eq!(strip_html("<p>a</p>  <p>b</p>"), "a b");
         assert_eq!(strip_html(""), "");
+    }
+
+    #[test]
+    fn document_round_trips_through_jsonl() {
+        let doc = to_document(&sample()).unwrap();
+        let line = serde_json::to_string(&doc).unwrap();
+        assert!(!line.contains('\n'), "a document must fit on one JSONL line");
+        let back: Document = serde_json::from_str(&line).unwrap();
+        assert_eq!(back, doc);
     }
 
     #[test]

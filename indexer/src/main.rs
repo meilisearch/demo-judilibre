@@ -5,6 +5,8 @@ mod meili;
 mod settings;
 mod transform;
 
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use clap::{Parser, Subcommand};
@@ -64,6 +66,19 @@ enum Command {
         no_chat: bool,
     },
 
+    /// Index decisions from local JSON Lines files written by `index --out`.
+    Load {
+        /// One or more .jsonl files (repeatable, or comma-separated)
+        #[arg(long = "from", required = true, value_delimiter = ',', value_name = "FILE")]
+        files: Vec<PathBuf>,
+        /// Stop after this many decisions
+        #[arg(long)]
+        limit: Option<usize>,
+        /// Skip writing passages to the chunk index
+        #[arg(long)]
+        no_chunks: bool,
+    },
+
     /// Export decisions from the Judilibre API and push them into Meilisearch.
     Index {
         /// Judilibre API base URL (PISTE production or sandbox)
@@ -115,6 +130,10 @@ enum Command {
         /// Skip writing passages to the chunk index
         #[arg(long)]
         no_chunks: bool,
+        /// Write the decisions to this JSON Lines file instead of Meilisearch.
+        /// Re-index later with `load --from <file>`, without calling Judilibre again.
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
     },
 }
 
@@ -191,6 +210,15 @@ async fn main() -> Result<()> {
             info!("setup complete");
         }
 
+        Command::Load { files, limit, no_chunks } => {
+            let targets = judilibre::Targets {
+                index: cli.index.clone(),
+                chunk_index: (!no_chunks).then_some(chunk_index.clone()),
+            };
+            let stats = judilibre::load_from_files(&meili, &targets, &files, limit).await?;
+            info!(indexed = stats.indexed, chunks = stats.chunks, "load finished");
+        }
+
         Command::Index {
             api_url,
             key_id,
@@ -207,6 +235,7 @@ async fn main() -> Result<()> {
             publication,
             with_files,
             no_chunks,
+            out,
         } => {
             let date_end = date_end.unwrap_or_else(|| chrono::Utc::now().date_naive());
             let auth = match (
@@ -250,6 +279,7 @@ async fn main() -> Result<()> {
                 &meili,
                 &ExportPlan {
                     targets: &targets,
+                    out: out.as_deref(),
                     query: &query,
                     start: date_start,
                     end: date_end,

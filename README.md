@@ -55,6 +55,7 @@ cargo run -- index --updated --date-start 2025-01-01   # incremental sync: decis
 ```
 
 - Export is windowed by month (most recent first) and windows are split when they exceed the Judilibre pagination cap (10 000 results).
+- `--out <file.jsonl>` writes the decisions to disk instead of Meilisearch, and `load --from <file.jsonl>` indexes them later. Judilibre has no bulk archive, so this is how you avoid re-exporting: fetch once, re-index as often as you like.
 - Decisions flagged `to_be_deleted` by Judilibre are removed from the index.
 - Documents keep the full pseudonymised text plus an `excerpt` (motivations + dispositif) used by the assistant.
 - `--publication b` restricts the export to Bulletin-published decisions: far richer titrage and sommaire, and a much smaller corpus (about 3 000 for 2024 to today, against 42 000 in total).

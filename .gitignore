@@ -18,5 +18,8 @@ web/.vercel/
 .DS_Store
 *.swp
 
+# Local dataset dumps (hundreds of MB, re-creatable with `index --out`)
+data/
+
 # Local tooling
 .claude/settings.local.json

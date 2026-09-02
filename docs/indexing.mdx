@@ -50,6 +50,20 @@ Judilibre returns `429` when throttled; the indexer backs off exponentially. Tun
 - Sortable: `decision_timestamp`
 - French stop words, `maxValuesPerFacet: 200`, `maxTotalHits: 10000`
 
+## Local dataset
+
+Judilibre publishes no bulk archive: `/export` is the only way to get the corpus, and a full pass over the Bulletin-published Cour de cassation decisions takes about fifteen minutes. Write it to disk once so later re-indexing costs nothing:
+
+```bash
+cargo run --release -- index --jurisdiction cc --publication b \
+  --date-start 2000-01-01 --date-end 2024-12-31 --out ../data/bulletin-2000-2024.jsonl
+cargo run --release -- load --from ../data/bulletin-2000-2024.jsonl
+```
+
+One decision per line, in the exact shape the index stores, so `load` re-chunks and re-pushes without touching PISTE. Extracted PDF text is included when the dump was made with `--with-files`. `load` accepts several files (repeat `--from` or separate with commas) and skips duplicate ids.
+
+Note that a local copy does not shorten the wait when Meilisearch has an embedder configured: embedding is what takes the time, not the download.
+
 ## Attached PDFs
 
 `--with-files` downloads every `files[].url` and extracts its text with the `pdf-inspector` crate (in-memory, no OCR, on a blocking thread). Extraction cleans the Markdown it returns: heading and emphasis markers are dropped, and letter-spaced headings that extract as doubled glyphs ("COOMMMMUUNNIIQQUUÉÉ") are halved back to "COMMUNIQUÉ". Text is capped at 40 000 characters per file. Failures are logged and never abort the run; a scanned PDF simply yields no text.
