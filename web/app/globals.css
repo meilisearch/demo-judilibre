@@ -57,6 +57,8 @@
  * reserved for search matches and citations.
  */
 :root {
+  /** Height of the sticky site header; the chat page fills the viewport below it. */
+  --header-height: 3.5rem;
   --background: oklch(0.985 0.004 250);
   --foreground: oklch(0.23 0.04 265);
   --card: oklch(1 0 0);
