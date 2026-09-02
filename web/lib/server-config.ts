@@ -13,6 +13,11 @@ export const serverEnv = {
   masterKey: process.env.MEILI_MASTER_KEY ?? "",
   /** Search-only key handed to the browser. */
   searchKey: process.env.MEILI_SEARCH_KEY || process.env.NEXT_PUBLIC_MEILI_SEARCH_KEY || "",
+  /**
+   * Server-side key with `documents.get`, used to read one decision. Kept apart
+   * from the browser key and far narrower than an admin key.
+   */
+  documentsKey: process.env.MEILI_DOCUMENTS_KEY ?? "",
   index,
   chunkIndex: process.env.MEILI_CHUNK_INDEX || `${index}_chunk`,
   /** Embedder name on both indexes; empty disables the hybrid-search toggle. */
@@ -67,9 +72,9 @@ export async function getSearchKey(): Promise<string> {
   return value;
 }
 
-/** Authenticated fetch, preferring the admin key and falling back to the search key. */
+/** Authenticated server-side fetch: admin key, else the documents key, else search. */
 export async function meiliFetch(path: string, init?: RequestInit): Promise<Response> {
-  const key = serverEnv.masterKey || (await getSearchKey());
+  const key = serverEnv.masterKey || serverEnv.documentsKey || (await getSearchKey());
   return fetch(`${serverEnv.meiliUrl}${path}`, {
     ...init,
     headers: {

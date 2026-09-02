@@ -24,9 +24,9 @@ async function getDecision(id: string): Promise<Decision | null> {
   });
   if (result?.hits[0]) return result.hits[0];
 
-  // `id` may not be filterable yet on an index created by an older run. With an
-  // admin key we can still read the document directly.
-  if (!serverEnv.masterKey) return null;
+  // `id` may not be filterable yet on an index created by an older run. A key with
+  // `documents.get` (or an admin key) can still read the document directly.
+  if (!serverEnv.masterKey && !serverEnv.documentsKey) return null;
   const direct = await meiliFetch(`/indexes/${serverEnv.index}/documents/${encodeURIComponent(id)}`);
   if (!direct.ok) return null;
   return (await direct.json()) as Decision;
