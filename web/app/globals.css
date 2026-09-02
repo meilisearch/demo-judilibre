@@ -143,6 +143,12 @@
   html {
     @apply font-sans;
   }
+  /* The input group provides its own clear button; hide WebKit's duplicate. */
+  input[type="search"]::-webkit-search-cancel-button,
+  input[type="search"]::-webkit-search-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+  }
   /* Search matches: a red pencil band under the words, never a yellow block. */
   mark {
     background: linear-gradient(transparent 55%, var(--seal-soft) 55%);

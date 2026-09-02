@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { citation, formatDate } from "@/lib/format";
-import { meiliSearch, serverEnv } from "@/lib/server-config";
+import { meiliFetch, meiliSearch, serverEnv } from "@/lib/server-config";
 import type { Decision } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +22,14 @@ async function getDecision(id: string): Promise<Decision | null> {
     filter: `id = '${id}'`,
     limit: 1,
   });
-  return result?.hits[0] ?? null;
+  if (result?.hits[0]) return result.hits[0];
+
+  // `id` may not be filterable yet on an index created by an older run. With an
+  // admin key we can still read the document directly.
+  if (!serverEnv.masterKey) return null;
+  const direct = await meiliFetch(`/indexes/${serverEnv.index}/documents/${encodeURIComponent(id)}`);
+  if (!direct.ok) return null;
+  return (await direct.json()) as Decision;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
