@@ -1,6 +1,6 @@
 "use client";
 
-import { Landmark, Quote, ScrollText, Search, Sparkles, X } from "lucide-react";
+import { Landmark, ScrollText, Search, Sparkles, X } from "lucide-react";
 import {
   InputGroup,
   InputGroupAddon,
@@ -22,13 +22,11 @@ interface Props {
   isFetching: boolean;
   /** Semantic search is available on the index being queried. */
   aiAvailable: boolean;
-  /** Passages are indexed, so the scope switch is meaningful. */
-  hasPassages: boolean;
-  /** Code articles are indexed. */
+  /** Code articles are indexed, so the corpus switch is meaningful. */
   hasArticles: boolean;
 }
 
-export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable, hasPassages, hasArticles }: Props) {
+export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable, hasArticles }: Props) {
   const { query, setQuery, mode, setMode, scope, setScope } = useSearchStore();
   const aiOn = mode === "hybrid";
 
@@ -36,11 +34,11 @@ export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
         <h1 className="font-heading text-3xl leading-tight font-medium tracking-tight sm:text-4xl">
-          La jurisprudence, <span className="italic">au mot près</span>.
+          Le droit français, <span className="italic">au mot près</span>.
         </h1>
         <p className="text-muted-foreground max-w-2xl text-sm">
-          Jurisprudence de la Cour de cassation (Judilibre) et articles des codes en vigueur (Légifrance). Tapez une
-          notion, un article de code ou un numéro de pourvoi : les résultats s&apos;affichent à chaque frappe.
+          Les articles des codes en vigueur (Légifrance) et la jurisprudence de la Cour de cassation (Judilibre).
+          Tapez une notion, un article de code ou un numéro de pourvoi : les résultats s&apos;affichent à chaque frappe.
         </p>
       </div>
 
@@ -52,8 +50,12 @@ export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable
           type="search"
           autoFocus
           enterKeyHint="search"
-          aria-label="Rechercher une décision"
-          placeholder="Rechercher une décision, une notion, un numéro de pourvoi…"
+          aria-label={scope === "articles" ? "Rechercher un article de code" : "Rechercher une décision"}
+          placeholder={
+            scope === "articles"
+              ? "Rechercher un article, une notion, un numéro d'article…"
+              : "Rechercher une décision, une notion, un numéro de pourvoi…"
+          }
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="text-base"
@@ -63,8 +65,7 @@ export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable
             <Spinner />
           ) : totalHits !== undefined ? (
             <InputGroupText className="hidden font-mono text-xs tabular-nums sm:flex">
-              {formatCount(totalHits)}{" "}
-              {scope === "passages" ? "passage" : scope === "articles" ? "article" : "décision"}
+              {formatCount(totalHits)} {scope === "articles" ? "article" : "décision"}
               {totalHits > 1 ? "s" : ""}
               {processingTimeMs !== undefined ? ` · ${processingTimeMs} ms` : ""}
             </InputGroupText>
@@ -103,7 +104,7 @@ export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable
         </InputGroupAddon>
       </InputGroup>
 
-      {hasPassages || hasArticles ? (
+      {hasArticles ? (
         <ToggleGroup
           value={[scope]}
           onValueChange={(v: string[]) => {
@@ -115,22 +116,14 @@ export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable
           aria-label="Corpus interrogé"
           className="self-start"
         >
+          <ToggleGroupItem value="articles">
+            <Landmark data-icon="inline-start" />
+            Codes
+          </ToggleGroupItem>
           <ToggleGroupItem value="decisions">
             <ScrollText data-icon="inline-start" />
             Décisions
           </ToggleGroupItem>
-          {hasPassages ? (
-            <ToggleGroupItem value="passages">
-              <Quote data-icon="inline-start" />
-              Passages
-            </ToggleGroupItem>
-          ) : null}
-          {hasArticles ? (
-            <ToggleGroupItem value="articles">
-              <Landmark data-icon="inline-start" />
-              Codes
-            </ToggleGroupItem>
-          ) : null}
         </ToggleGroup>
       ) : null}
     </section>

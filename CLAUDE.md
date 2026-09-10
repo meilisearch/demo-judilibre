@@ -9,7 +9,7 @@ Monorepo with three parts sharing one root `.env` (see `.env.example`):
 ## Three indexes
 
 - `judilibre`: one document per decision (Judilibre API). Fields in `indexer/src/transform.rs`, mirrored in `web/lib/types.ts`.
-- `judilibre_chunk`: ~2 000-character passages of each decision and of each attached PDF, with `distinctAttribute: decision_id`. Fields in `indexer/src/chunk.rs`, mirrored as `ChunkHit`.
+- `judilibre_chunk`: ~2 000-character passages of each decision and of each attached PDF, with `distinctAttribute: decision_id`. Fields in `indexer/src/chunk.rs`. Built but not surfaced: it is neither browsable in the UI nor offered to the assistant (its chat `description` is empty, which withdraws an index from the chat).
 - `legi`: in-force articles of the French codes, parsed from the LEGI bulk archive (DILA). Fields in `indexer/src/legi.rs`.
 
 Keep the Rust structs and the TypeScript types in sync. All three carry the same Voyage AI embedder (`voyage`, model `voyage-law-2`) via Meilisearch's `rest` source, with a per-shape `documentTemplate` (`EmbedderKind`).
@@ -30,6 +30,13 @@ What `refs.rs` has to defend against, all seen in real visas:
 - dates carry numbers ("du 26 août 1789") and must be stripped as a whole, because Code civil article numbers are themselves four digits.
 
 The join is version-blind by construction: a key is a code plus a number, so a decision applying the pre-2016 article 1134 links to today's article 1134, which is a different rule. The article page states this rather than implying otherwise. Note that a *recent* decision can apply an old wording, so comparing dates does not detect it.
+
+## The assistant's choice of index cannot be dictated
+
+`searchIndexUidParam`, `searchDescription`, the system prompt and the per-index
+descriptions all state that the codes come first. gpt-5.5 still searches
+`judilibre` first. Emptying an index's chat `description` does reliably withdraw
+it, so the only hard control available is which indexes are offered at all.
 
 ## Do not push partial documents to an index with an embedder
 

@@ -147,13 +147,13 @@ pub async fn apply_chat(meili: &MeiliClient, config: &ChatConfig<'_>) -> Result<
         "apiKey": api_key,
         "prompts": {
             "system": SYSTEM_PROMPT,
-            "searchDescription": "Recherche dans la base Judilibre des décisions de justice françaises (Cour de cassation, cours d'appel). Utilise-la pour toute question de droit ou de jurisprudence.",
+            "searchDescription": "Recherche dans le droit français : d'abord les articles des codes en vigueur (index 'legi'), puis la jurisprudence de la Cour de cassation. Pour toute question de droit, commence par chercher l'article applicable, puis les décisions qui l'interprètent.",
             "searchQParam": "Mots-clés juridiques en français à rechercher (notions, articles de code, numéro de pourvoi, ECLI). Reste concis : 2 à 8 mots.",
             "searchFilterParam": "Filtre Meilisearch optionnel. Attributs : jurisdiction, chamber, formation, publication, type, solution, themes, year (entier), decision_timestamp (unix). Exemple : chamber = 'Chambre sociale' AND year >= 2022",
             "searchIndexUidParam": format!(
-                "Index à interroger : '{chunk_index}' pour retrouver les passages précis d'une décision (recommandé), \
-                 '{index}' pour raisonner sur des décisions entières, '{legi_index}' pour le texte des articles \
-                 des codes en vigueur."
+                "Index à interroger, dans cet ordre : d'abord '{legi_index}' (articles des codes en vigueur) pour \
+                 établir la règle applicable, puis '{index}' (décisions de la Cour de cassation) pour la \
+                 jurisprudence qui l'interprète."
             )
         }
     });
@@ -168,7 +168,7 @@ pub async fn apply_chat(meili: &MeiliClient, config: &ChatConfig<'_>) -> Result<
         search_parameters["hybrid"] = json!({ "embedder": embedder, "semanticRatio": 0.5 });
     }
     let index_chat = json!({
-        "description": "Décisions de justice françaises publiées sur Judilibre (Cour de cassation et cours d'appel) : arrêts, avis, QPC, avec titrage, sommaire, textes appliqués et texte intégral pseudonymisé. Une décision par document.",
+        "description": "Décisions de la Cour de cassation (Judilibre) : arrêts, avis et QPC, avec titrage, sommaire, textes appliqués et motivations. À interroger APRÈS l'index des codes, pour la jurisprudence qui interprète l'article applicable.",
         "documentTemplate": DOCUMENT_TEMPLATE,
         "documentTemplateMaxBytes": 7000,
         "searchParameters": search_parameters.clone()
@@ -176,8 +176,12 @@ pub async fn apply_chat(meili: &MeiliClient, config: &ChatConfig<'_>) -> Result<
     info!(index, "configuring index chat settings");
     meili.update_index_chat_settings(index, &index_chat).await?;
 
+    // Withdrawn from the chat: with three indexes offered, the model reached for
+    // the passages first whatever the prompts said. The assistant now works from
+    // the codes and then whole decisions, which is the order we want. The index
+    // itself stays — it is what the passage search would use if reinstated.
     let chunk_chat = json!({
-        "description": "Passages (extraits) des décisions Judilibre et de leurs documents associés (communiqués, rapports, avis). À privilégier pour citer un motif précis : chaque document est un extrait d'une décision, avec sa référence complète.",
+        "description": "",
         "documentTemplate": CHUNK_DOCUMENT_TEMPLATE,
         "documentTemplateMaxBytes": 4000,
         "searchParameters": search_parameters
@@ -186,7 +190,7 @@ pub async fn apply_chat(meili: &MeiliClient, config: &ChatConfig<'_>) -> Result<
     meili.update_index_chat_settings(chunk_index, &chunk_chat).await?;
 
     let legi_chat = json!({
-        "description": "Articles en vigueur des codes français (Légifrance/LEGI) : le texte de la règle elle-même, avec son code et sa place dans celui-ci. À interroger pour citer un article, vérifier sa rédaction actuelle ou répondre sur le droit applicable plutôt que sur la jurisprudence.",
+        "description": "Articles en vigueur des codes français (Légifrance/LEGI) : le texte de la règle elle-même, avec son code et sa place dans celui-ci. COMMENCER PAR CET INDEX pour toute question de droit : il donne la règle applicable, que la jurisprudence viendra ensuite préciser. À interroger pour citer un article ou vérifier sa rédaction actuelle.",
         "documentTemplate": ARTICLE_DOCUMENT_TEMPLATE,
         "documentTemplateMaxBytes": 4000,
         "searchParameters": { "limit": 6 }
@@ -204,18 +208,25 @@ pub async fn apply_chat(meili: &MeiliClient, config: &ChatConfig<'_>) -> Result<
     Ok(())
 }
 
-const SYSTEM_PROMPT: &str = "Tu es un assistant juridique spécialisé dans la jurisprudence française, \
-adossé à la base Judilibre de la Cour de cassation. Réponds en français, de façon précise et structurée. \
+const SYSTEM_PROMPT: &str = "Tu es un assistant juridique adossé à deux sources : les articles des codes \
+français en vigueur (Légifrance) et la jurisprudence de la Cour de cassation (Judilibre). \
+MÉTHODE, à suivre dans cet ordre : commence toujours par chercher dans l'index des codes l'article qui \
+fonde la réponse et cite-le ; cherche ensuite la jurisprudence qui l'interprète. N'interroge pas la \
+jurisprudence en premier. \
+Réponds en français, de façon précise et structurée. \
 Appuie chaque affirmation sur les décisions retournées par la recherche : cite la juridiction, la chambre, \
 la date et le numéro de pourvoi (par exemple « Cass. soc., 12 janvier 2024, n° 22-10.123 »). \
 Si les décisions trouvées ne permettent pas de répondre, dis-le clairement plutôt que d'inventer. \
 Ne donne pas de conseil juridique personnalisé : rappelle que la réponse est informative. \
 Lorsque la question porte sur une période ou une chambre précise, utilise le paramètre de filtre. \
-Privilégie l'index des passages pour retrouver et citer un motif précis, et l'index des décisions \
-pour une vue d'ensemble ; les passages issus des documents associés (communiqués, rapports, avis) \
-doivent être présentés comme tels et non comme le texte de l'arrêt. \
-Cite le texte d'un article depuis l'index des codes et la jurisprudence depuis celui des décisions, \
-sans confondre les deux. \
+Procède dans cet ordre : d'abord le texte applicable dans les codes, ensuite la jurisprudence qui \
+l'interprète. Commence donc par chercher les articles pertinents, cite-les, puis appuie-toi sur les \
+décisions pour montrer comment ils sont appliqués. \
+Ne confonds pas les deux sources : le texte d'un article vient de l'index des codes, la solution \
+retenue vient des décisions. Les passages issus des documents associés (communiqués, rapports, \
+avis) doivent être présentés comme tels et non comme le texte de l'arrêt. \
+Un article peut avoir été renuméroté ou réécrit : si une décision vise un article « dans sa \
+rédaction antérieure », signale que le texte en vigueur peut différer de celui qu'elle applique. \
 Sois économe en recherches : trois à cinq requêtes bien choisies suffisent presque toujours. \
 Ne relance pas une recherche pour reformuler la même idée, et réponds dès que les décisions \
 trouvées permettent de le faire.";

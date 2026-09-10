@@ -110,44 +110,11 @@ export interface SearchConfig {
   host: string;
   apiKey: string;
   index: string;
-  /** Passage index, or null when no passages are indexed. */
-  chunkIndex: string | null;
   /** Code-article index, or null when no articles are indexed. */
   legiIndex: string | null;
   legiEmbedder: string | null;
   /** Embedder name when hybrid (semantic) search is configured on the index. */
   embedder: string | null;
-  chunkEmbedder: string | null;
-}
-
-/** A passage of a decision, from the chunk index. */
-export interface ChunkHit {
-  id: string;
-  decision_id: string;
-  chunk_index: number;
-  chunk_count: number;
-  /** `decision` or `attachment`. */
-  source: string;
-  attachment_name: string;
-  attachment_type: string;
-  attachment_url: string;
-  content: string;
-  content_chars: number;
-  jurisdiction: string;
-  chamber: string;
-  formation: string;
-  number: string;
-  ecli: string;
-  publication: string[];
-  decision_date: string;
-  year: number;
-  type: string;
-  solution: string;
-  titles: string[];
-  themes: string[];
-  summary: string;
-  url: string;
-  _formatted?: { content?: string; titles?: string[]; summary?: string; number?: string };
 }
 
 /** Highlight marker tags used with Meilisearch so we never inject HTML. */

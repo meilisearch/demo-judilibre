@@ -2,22 +2,18 @@ import { getEmbedderName, getIndexPopulated, getSearchKey, serverEnv } from "@/l
 
 export async function GET() {
   try {
-    const [apiKey, embedder, chunkEmbedder, legiEmbedder, hasChunks, hasLegi] = await Promise.all([
+    const [apiKey, embedder, legiEmbedder, hasLegi] = await Promise.all([
       getSearchKey(),
       getEmbedderName(),
-      getEmbedderName(serverEnv.chunkIndex),
       getEmbedderName(serverEnv.legiIndex),
-      getIndexPopulated(serverEnv.chunkIndex),
       getIndexPopulated(serverEnv.legiIndex),
     ]);
     return Response.json({
       host: serverEnv.publicMeiliUrl,
       apiKey,
       index: serverEnv.index,
-      chunkIndex: hasChunks ? serverEnv.chunkIndex : null,
       legiIndex: hasLegi ? serverEnv.legiIndex : null,
       embedder,
-      chunkEmbedder,
       legiEmbedder,
     });
   } catch (error) {

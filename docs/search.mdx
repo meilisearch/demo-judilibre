@@ -11,9 +11,10 @@ The switch above the filters chooses which index is queried:
 
 | Toggle | Index | One hit is |
 |---|---|---|
+| Codes (default) | `legi` | an in-force article of a French code |
 | Décisions | `judilibre` | a whole decision |
-| Passages | `judilibre_chunk` | the best passage of a decision (`distinctAttribute`) |
-| Codes | `legi` | an in-force article of a French code |
+
+The passage index `judilibre_chunk` is still built, but it is no longer browsed: it proved the least useful of the three to read through, and offering it alongside the others muddied the assistant's choice of corpus.
 
 Facets follow the corpus: chamber, solution and publication for case law; code and subdivision for articles. The **IA** button on the right of the search field turns on hybrid search (`semanticRatio: 0.6`) using the Voyage embedder; it only appears when an embedder is configured on the index being queried. Sorting by date is hidden in the Codes corpus, where it carries no meaning.
 

@@ -4,10 +4,11 @@ import type { FacetAttribute } from "@/lib/types";
 export type SortOption = "relevance" | "date_desc" | "date_asc";
 export type SearchMode = "keyword" | "hybrid";
 /**
- * Which corpus is being searched: whole decisions, the passages extracted from
- * them and their PDFs, or the in-force articles of the French codes.
+ * Which corpus is being searched: the in-force articles of the French codes, or
+ * the decisions. The passage index still exists — it is what lets the assistant
+ * quote a precise motif — but it is not browsed directly.
  */
-export type SearchScope = "decisions" | "passages" | "articles";
+export type SearchScope = "articles" | "decisions";
 
 /** Weight of the semantic side in hybrid search (0 = keyword only, 1 = vectors only). */
 export const HYBRID_SEMANTIC_RATIO = 0.6;
@@ -35,7 +36,8 @@ export const useSearchStore = create<SearchState>((set) => ({
   filters: {},
   sort: "relevance",
   mode: "keyword",
-  scope: "decisions",
+  // Codes is the first tab: the law before its application.
+  scope: "articles",
   page: 1,
   setQuery: (query) => set({ query, page: 1 }),
   setMode: (mode) => set({ mode, page: 1 }),
