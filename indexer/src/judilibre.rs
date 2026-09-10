@@ -430,6 +430,70 @@ pub async fn run_export(
     Ok(stats)
 }
 
+/// Recompute the derived reference keys of already-indexed decisions.
+///
+/// `visa_refs` is derived from `visa`, so a change to the extraction rules — or
+/// adding the field at all — leaves indexed documents stale. Meilisearch's
+/// document addition merges fields, so pushing `{id, visa_refs}` alone refreshes
+/// them without touching the text and therefore without re-embedding.
+pub async fn refresh_visa_refs(
+    meili: &MeiliClient,
+    index: &str,
+    paths: &[std::path::PathBuf],
+) -> Result<usize> {
+    use std::io::BufRead;
+
+    #[derive(serde::Serialize)]
+    struct Patch {
+        id: String,
+        visa_refs: Vec<String>,
+    }
+
+    let mut patches: Vec<Patch> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut pushed = 0usize;
+    let mut last_task = None;
+
+    for path in paths {
+        let file = std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
+        info!(path = %path.display(), "recomputing reference keys");
+        for line in std::io::BufReader::new(file).lines() {
+            let line = line.with_context(|| format!("reading {}", path.display()))?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            let doc: Document = serde_json::from_str(&line).context("malformed decision")?;
+            if doc.id.is_empty() || !seen.insert(doc.id.clone()) {
+                continue;
+            }
+            let mut visa_refs: Vec<String> = Vec::new();
+            for v in &doc.visa {
+                for key in crate::refs::visa_references(v) {
+                    if !visa_refs.contains(&key) {
+                        visa_refs.push(key);
+                    }
+                }
+            }
+            patches.push(Patch { id: doc.id, visa_refs });
+            if patches.len() >= 20_000 {
+                last_task = Some(meili.add_documents(index, &patches).await?);
+                pushed += patches.len();
+                info!(pushed, "reference keys queued");
+                patches.clear();
+            }
+        }
+    }
+    if !patches.is_empty() {
+        last_task = Some(meili.add_documents(index, &patches).await?);
+        pushed += patches.len();
+    }
+    if let Some(task) = last_task {
+        info!(task, "waiting for Meilisearch");
+        meili.wait_for_task(task).await?;
+    }
+    Ok(pushed)
+}
+
 /// Index decisions from local JSON Lines files produced by `--out`.
 pub async fn load_from_files(
     meili: &MeiliClient,
@@ -452,10 +516,20 @@ pub async fn load_from_files(
             if line.trim().is_empty() {
                 continue;
             }
-            let doc: Document = serde_json::from_str(&line)
+            let mut doc: Document = serde_json::from_str(&line)
                 .with_context(|| format!("{}:{}: malformed decision", path.display(), n + 1))?;
             if doc.id.is_empty() || !seen.insert(doc.id.clone()) {
                 continue;
+            }
+            // Derived from `visa`; recompute so an older dump gains newer keys.
+            if doc.visa_refs.is_empty() && !doc.visa.is_empty() {
+                for v in &doc.visa {
+                    for key in crate::refs::visa_references(v) {
+                        if !doc.visa_refs.contains(&key) {
+                            doc.visa_refs.push(key);
+                        }
+                    }
+                }
             }
             if targets.chunk_index.is_some() {
                 let chunks = chunk_document(&doc);

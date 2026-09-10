@@ -62,6 +62,8 @@ export function facetLabel(attr: string): string {
     formation: "Formation",
     themes: "Matières",
     jurisdiction: "Juridiction",
+    code: "Code",
+    section: "Subdivision",
   };
   return labels[attr] ?? attr;
 }

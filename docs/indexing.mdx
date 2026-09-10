@@ -50,6 +50,28 @@ Judilibre returns `429` when throttled; the indexer backs off exponentially. Tun
 - Sortable: `decision_timestamp`
 - French stop words, `maxValuesPerFacet: 200`, `maxTotalHits: 10000`
 
+## Legislation (LEGI)
+
+`cargo run -- legi --archive <Freemium_legi_global_*.tar.gz>` parses DILA's bulk archive. It is streamed once, never extracted: 5.25M XML entries, of which 488 906 are article files under the in-force code tree and **161 296** are kept. The rest are superseded versions (`ETAT` other than `VIGUEUR`), uncodified texts (`nature` other than `CODE`), or amending provisions whose whole text is "a modifié les dispositions suivantes".
+
+Each article file already carries its code title and the nested `TITRE_TM` chain, so the section hierarchy needs no join. Articles are short — median 490 characters — so they are indexed whole rather than chunked, with their own embedder template.
+
+`--out <file.jsonl>` dumps the articles instead of indexing them, as for decisions.
+
+## Cross-linking with the case law
+
+A decision's `visa` is prose, and its Légifrance link is a **search** URL, never a `LEGIARTI` id. `indexer/src/refs.rs` therefore reduces both sides to one key:
+
+```
+"Articles L. 461-1 et L. 461-3 du code de l'urbanisme."  ->  code-de-l-urbanisme:L461-1
+                                                             code-de-l-urbanisme:L461-3
+LEGI: TITRE_TXT "Code de l'urbanisme" + NUM "L461-1"     ->  code-de-l-urbanisme:L461-1
+```
+
+Subdivision numbers are stripped first, so "Article 641, alinéa 1" yields one reference and not two. Roughly 78% of visa lines name a code; the others (treaties, dated decrees, the Déclaration des droits de l'homme) have no counterpart in LEGI and yield nothing.
+
+`Document.visa_refs` stores those keys and is filterable. Because the field is derived, `load` recomputes it, and `refresh-refs --from <dumps>` back-fills already-indexed decisions by pushing only `{id, visa_refs}` — Meilisearch merges fields on document addition, so nothing is re-embedded.
+
 ## Local dataset
 
 Judilibre publishes no bulk archive: `/export` is the only way to get the corpus, and a full pass over the Bulletin-published Cour de cassation decisions takes about fifteen minutes. Write it to disk once so later re-indexing costs nothing:

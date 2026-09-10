@@ -1,6 +1,6 @@
 "use client";
 
-import { Quote, ScrollText, Search, Sparkles, X } from "lucide-react";
+import { Landmark, Quote, ScrollText, Search, Sparkles, X } from "lucide-react";
 import {
   InputGroup,
   InputGroupAddon,
@@ -24,9 +24,11 @@ interface Props {
   aiAvailable: boolean;
   /** Passages are indexed, so the scope switch is meaningful. */
   hasPassages: boolean;
+  /** Code articles are indexed. */
+  hasArticles: boolean;
 }
 
-export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable, hasPassages }: Props) {
+export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable, hasPassages, hasArticles }: Props) {
   const { query, setQuery, mode, setMode, scope, setScope } = useSearchStore();
   const aiOn = mode === "hybrid";
 
@@ -37,8 +39,8 @@ export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable
           La jurisprudence, <span className="italic">au mot près</span>.
         </h1>
         <p className="text-muted-foreground max-w-2xl text-sm">
-          Décisions de la Cour de cassation publiées sur Judilibre. Tapez une notion, un article de code ou un numéro de
-          pourvoi : les résultats s&apos;affichent à chaque frappe.
+          Jurisprudence de la Cour de cassation (Judilibre) et articles des codes en vigueur (Légifrance). Tapez une
+          notion, un article de code ou un numéro de pourvoi : les résultats s&apos;affichent à chaque frappe.
         </p>
       </div>
 
@@ -61,7 +63,8 @@ export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable
             <Spinner />
           ) : totalHits !== undefined ? (
             <InputGroupText className="hidden font-mono text-xs tabular-nums sm:flex">
-              {formatCount(totalHits)} {scope === "passages" ? "passage" : "décision"}
+              {formatCount(totalHits)}{" "}
+              {scope === "passages" ? "passage" : scope === "articles" ? "article" : "décision"}
               {totalHits > 1 ? "s" : ""}
               {processingTimeMs !== undefined ? ` · ${processingTimeMs} ms` : ""}
             </InputGroupText>
@@ -100,7 +103,7 @@ export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable
         </InputGroupAddon>
       </InputGroup>
 
-      {hasPassages ? (
+      {hasPassages || hasArticles ? (
         <ToggleGroup
           value={[scope]}
           onValueChange={(v: string[]) => {
@@ -109,17 +112,25 @@ export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable
           }}
           variant="outline"
           size="sm"
-          aria-label="Portée de la recherche"
+          aria-label="Corpus interrogé"
           className="self-start"
         >
           <ToggleGroupItem value="decisions">
             <ScrollText data-icon="inline-start" />
             Décisions
           </ToggleGroupItem>
-          <ToggleGroupItem value="passages">
-            <Quote data-icon="inline-start" />
-            Passages
-          </ToggleGroupItem>
+          {hasPassages ? (
+            <ToggleGroupItem value="passages">
+              <Quote data-icon="inline-start" />
+              Passages
+            </ToggleGroupItem>
+          ) : null}
+          {hasArticles ? (
+            <ToggleGroupItem value="articles">
+              <Landmark data-icon="inline-start" />
+              Codes
+            </ToggleGroupItem>
+          ) : null}
         </ToggleGroup>
       ) : null}
     </section>

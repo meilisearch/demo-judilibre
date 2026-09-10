@@ -6,6 +6,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type SortOption, useSearchStore } from "@/lib/search-store";
+import { ArticleCard } from "@/app/article-card";
 import { HitCard } from "@/app/hit-card";
 import { PassageCard } from "@/app/passage-card";
 import { HITS_PER_PAGE, type SearchResult } from "@/app/search-page";
@@ -31,6 +32,7 @@ export function Results({ result, loading }: Props) {
         <p className="text-muted-foreground text-xs">
           {result && result.totalPages > 0 ? `Page ${page} sur ${result.totalPages}` : " "}
         </p>
+        {scope === "articles" ? null : (
         <Select value={sort} onValueChange={(v: string | null) => {
             if (v) setSort(v as SortOption);
           }}>
@@ -48,6 +50,7 @@ export function Results({ result, loading }: Props) {
             </SelectGroup>
           </SelectContent>
         </Select>
+        )}
       </div>
 
       {loading && !result ? (
@@ -61,7 +64,7 @@ export function Results({ result, loading }: Props) {
             </div>
           ))}
         </div>
-      ) : result && result.hits.length === 0 && result.passages.length === 0 ? (
+      ) : result && result.hits.length === 0 && result.passages.length === 0 && result.articles.length === 0 ? (
         <Empty className="border">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -71,7 +74,9 @@ export function Results({ result, loading }: Props) {
               {hasCriteria
                 ? scope === "passages"
                   ? "Aucun passage ne correspond"
-                  : "Aucune décision ne correspond"
+                  : scope === "articles"
+                    ? "Aucun article ne correspond"
+                    : "Aucune décision ne correspond"
                 : "L'index est vide"}
             </EmptyTitle>
             <EmptyDescription>
@@ -91,6 +96,11 @@ export function Results({ result, loading }: Props) {
           {result?.passages.map((hit, i) => (
             <li key={hit.id}>
               <PassageCard hit={hit} position={(page - 1) * HITS_PER_PAGE + i + 1} />
+            </li>
+          ))}
+          {result?.articles.map((hit, i) => (
+            <li key={hit.id}>
+              <ArticleCard hit={hit} position={(page - 1) * HITS_PER_PAGE + i + 1} />
             </li>
           ))}
         </ol>

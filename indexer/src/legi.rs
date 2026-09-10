@@ -323,7 +323,8 @@ pub async fn apply_settings(meili: &crate::meili::MeiliClient, index: &str) -> R
     meili.create_index(index, "id").await?;
     let settings = json!({
         "searchableAttributes": ["reference", "number", "code", "section", "hierarchy", "text"],
-        "filterableAttributes": ["code", "code_id", "number", "reference_key", "section", "year", "date_debut_timestamp"],
+        // `id` is filterable so the article page can be fetched with a search-only key.
+        "filterableAttributes": ["id", "code", "code_id", "number", "reference_key", "section", "year", "date_debut_timestamp"],
         "sortableAttributes": ["date_debut_timestamp", "code", "number"],
         "rankingRules": ["words", "typo", "proximity", "attribute", "sort", "exactness"],
         // An article number must match exactly: "L110-1" is not "L110-11".

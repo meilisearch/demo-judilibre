@@ -3,8 +3,11 @@ import type { FacetAttribute } from "@/lib/types";
 
 export type SortOption = "relevance" | "date_desc" | "date_asc";
 export type SearchMode = "keyword" | "hybrid";
-/** Search whole decisions, or the passages extracted from them and their PDFs. */
-export type SearchScope = "decisions" | "passages";
+/**
+ * Which corpus is being searched: whole decisions, the passages extracted from
+ * them and their PDFs, or the in-force articles of the French codes.
+ */
+export type SearchScope = "decisions" | "passages" | "articles";
 
 /** Weight of the semantic side in hybrid search (0 = keyword only, 1 = vectors only). */
 export const HYBRID_SEMANTIC_RATIO = 0.6;

@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ChevronDown, ExternalLink, FileText, Link2, Star } from "lucide-react";
+import { ArrowLeft, ChevronDown, ExternalLink, FileText, Landmark, Link2, Star } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { citation, formatDate } from "@/lib/format";
 import { meiliFetch, meiliSearch, serverEnv } from "@/lib/server-config";
-import type { Decision } from "@/lib/types";
+import type { Article, Decision } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /**
@@ -32,6 +32,22 @@ async function getDecision(id: string): Promise<Decision | null> {
   return (await direct.json()) as Decision;
 }
 
+/**
+ * Resolve the decision's visa to indexed code articles. The visa is prose, so
+ * the join goes through the normalised keys the indexer stores in `visa_refs`.
+ */
+async function getCitedArticles(keys: string[]): Promise<Article[]> {
+  if (keys.length === 0) return [];
+  const filter = keys.map((k) => `reference_key = '${k.replace(/'/g, "\\'")}'`).join(" OR ");
+  const result = await meiliSearch<Article>(serverEnv.legiIndex, {
+    q: "",
+    filter,
+    limit: 50,
+    attributesToRetrieve: ["id", "code", "number", "reference", "reference_key", "section", "text"],
+  });
+  return result?.hits ?? [];
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const d = await getDecision(id);
@@ -44,6 +60,7 @@ export default async function DecisionPage({ params }: { params: Promise<{ id: s
   if (!d) notFound();
 
   const extracted = (d.files ?? []).filter((f) => f.content?.trim());
+  const articles = await getCitedArticles(d.visa_refs ?? []);
 
   const meta: Array<[string, string]> = [
     ["Juridiction", d.jurisdiction],
@@ -170,6 +187,23 @@ export default async function DecisionPage({ params }: { params: Promise<{ id: s
                   <li key={v}>{v}</li>
                 ))}
               </ul>
+              {articles.length > 0 ? (
+                <ul className="mt-1 flex flex-col gap-1">
+                  {articles.map((a) => (
+                    <li key={a.id}>
+                      <Link
+                        href={`/article/${a.id}`}
+                        className="text-seal inline-flex max-w-full items-center gap-1 text-xs hover:underline"
+                      >
+                        <Landmark className="size-3 shrink-0" aria-hidden />
+                        <span className="truncate">
+                          Article {a.number} · {a.code}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </section>
           ) : null}
 

@@ -9,7 +9,10 @@ import {
   FACET_ATTRIBUTES,
   HL_POST,
   HL_PRE,
+  LEGI_FACET_ATTRIBUTES,
+  type ArticleHit,
   type ChunkHit,
+  type FacetAttribute,
   type FacetDistribution,
   type SearchHit,
 } from "@/lib/types";
@@ -22,10 +25,15 @@ export const HITS_PER_PAGE = 10;
 export interface SearchResult {
   hits: SearchHit[];
   passages: ChunkHit[];
+  articles: ArticleHit[];
   /** Embedder available on the index being searched. */
   embedder: string | null;
   /** True when a passage index holds documents. */
   hasPassages: boolean;
+  /** True when a code-article index holds documents. */
+  hasArticles: boolean;
+  /** Facets offered for the corpus being searched. */
+  facetAttributes: readonly FacetAttribute[];
   totalHits: number;
   totalPages: number;
   processingTimeMs: number;
@@ -53,6 +61,22 @@ const DECISION_FIELDS = [
   "text_length",
   "url",
   "excerpt",
+];
+
+const ARTICLE_FIELDS = [
+  "id",
+  "code",
+  "code_id",
+  "number",
+  "reference",
+  "reference_key",
+  "hierarchy",
+  "section",
+  "text",
+  "text_length",
+  "date_debut",
+  "year",
+  "url",
 ];
 
 const PASSAGE_FIELDS = [
@@ -89,28 +113,41 @@ export function SearchPage() {
     placeholderData: keepPreviousData,
     queryFn: async (): Promise<SearchResult> => {
       const { client, config } = await getMeili();
-      const passages = scope === "passages" && Boolean(config.chunkIndex);
-      const index = passages ? (config.chunkIndex as string) : config.index;
-      const embedder = passages ? config.chunkEmbedder : config.embedder;
+      const kind =
+        scope === "passages" && config.chunkIndex
+          ? "passages"
+          : scope === "articles" && config.legiIndex
+            ? "articles"
+            : "decisions";
+
+      const index =
+        kind === "passages" ? (config.chunkIndex as string) : kind === "articles" ? (config.legiIndex as string) : config.index;
+      const embedder =
+        kind === "passages" ? config.chunkEmbedder : kind === "articles" ? config.legiEmbedder : config.embedder;
+      const facetAttributes = kind === "articles" ? LEGI_FACET_ATTRIBUTES : FACET_ATTRIBUTES;
       const hybrid =
         mode === "hybrid" && embedder && query.trim() ? { embedder, semanticRatio: HYBRID_SEMANTIC_RATIO } : undefined;
 
-      const res = await client.index(index).search<SearchHit & ChunkHit>(query, {
+      const res = await client.index(index).search<SearchHit & ChunkHit & ArticleHit>(query, {
         hybrid,
         filter: buildFilter(filters),
-        facets: [...FACET_ATTRIBUTES],
-        attributesToRetrieve: passages ? PASSAGE_FIELDS : DECISION_FIELDS,
-        attributesToHighlight: passages
-          ? ["content", "titles", "summary", "number"]
-          : ["summary", "titles", "themes", "number", "excerpt", "text"],
+        facets: [...facetAttributes],
+        attributesToRetrieve:
+          kind === "passages" ? PASSAGE_FIELDS : kind === "articles" ? ARTICLE_FIELDS : DECISION_FIELDS,
+        attributesToHighlight:
+          kind === "passages"
+            ? ["content", "titles", "summary", "number"]
+            : kind === "articles"
+              ? ["reference", "number", "code", "section", "text"]
+              : ["summary", "titles", "themes", "number", "excerpt", "text"],
         highlightPreTag: HL_PRE,
         highlightPostTag: HL_POST,
         // Crop the motivations excerpt as well as the raw text: it carries the reasoning,
         // which is the context a result card needs when there is no sommaire.
-        attributesToCrop: passages ? ["content"] : ["excerpt", "text"],
-        cropLength: passages ? 60 : 55,
+        attributesToCrop: kind === "passages" ? ["content"] : kind === "articles" ? ["text"] : ["excerpt", "text"],
+        cropLength: kind === "decisions" ? 55 : 60,
         cropMarker: "…",
-        sort: sortParam(sort),
+        sort: kind === "articles" ? undefined : sortParam(sort),
         hitsPerPage: HITS_PER_PAGE,
         page,
       });
@@ -119,10 +156,13 @@ export function SearchPage() {
       // exhaustive fields are present.
       const paged = res as typeof res & { totalHits?: number; totalPages?: number };
       return {
-        hits: passages ? [] : (res.hits as SearchHit[]),
-        passages: passages ? (res.hits as ChunkHit[]) : [],
+        hits: kind === "decisions" ? (res.hits as SearchHit[]) : [],
+        passages: kind === "passages" ? (res.hits as ChunkHit[]) : [],
+        articles: kind === "articles" ? (res.hits as ArticleHit[]) : [],
         embedder,
         hasPassages: Boolean(config.chunkIndex),
+        hasArticles: Boolean(config.legiIndex),
+        facetAttributes,
         totalHits: paged.totalHits ?? 0,
         totalPages: paged.totalPages ?? 0,
         processingTimeMs: res.processingTimeMs,
@@ -139,6 +179,7 @@ export function SearchPage() {
         isFetching={search.isFetching}
         aiAvailable={Boolean(search.data?.embedder)}
         hasPassages={Boolean(search.data?.hasPassages)}
+        hasArticles={Boolean(search.data?.hasArticles)}
       />
 
       {search.isError ? (
@@ -152,7 +193,11 @@ export function SearchPage() {
         </Alert>
       ) : (
         <div className="grid gap-8 lg:grid-cols-[15rem_minmax(0,1fr)]">
-          <Facets distribution={search.data?.facetDistribution} loading={search.isPending} />
+          <Facets
+            distribution={search.data?.facetDistribution}
+            attributes={search.data?.facetAttributes ?? FACET_ATTRIBUTES}
+            loading={search.isPending}
+          />
           <Results result={search.data} loading={search.isPending} />
         </div>
       )}

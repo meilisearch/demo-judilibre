@@ -121,6 +121,7 @@ pub async fn apply_voyage_embedder(
 pub struct ChatConfig<'a> {
     pub index: &'a str,
     pub chunk_index: &'a str,
+    pub legi_index: &'a str,
     pub workspace: &'a str,
     /// `openAi`, `mistral`, `azureOpenAi`, `vLlm` or `gemini`.
     pub source: &'a str,
@@ -132,7 +133,7 @@ pub struct ChatConfig<'a> {
 }
 
 pub async fn apply_chat(meili: &MeiliClient, config: &ChatConfig<'_>) -> Result<()> {
-    let ChatConfig { index, chunk_index, workspace, source, api_key, base_url, embedder } = *config;
+    let ChatConfig { index, chunk_index, legi_index, workspace, source, api_key, base_url, embedder } = *config;
     info!("enabling chatCompletions experimental feature");
     if let Err(e) = meili.enable_experimental(&json!({ "chatCompletions": true })).await {
         tracing::warn!(
@@ -151,7 +152,8 @@ pub async fn apply_chat(meili: &MeiliClient, config: &ChatConfig<'_>) -> Result<
             "searchFilterParam": "Filtre Meilisearch optionnel. Attributs : jurisdiction, chamber, formation, publication, type, solution, themes, year (entier), decision_timestamp (unix). Exemple : chamber = 'Chambre sociale' AND year >= 2022",
             "searchIndexUidParam": format!(
                 "Index à interroger : '{chunk_index}' pour retrouver les passages précis d'une décision (recommandé), \
-                 '{index}' pour raisonner sur des décisions entières."
+                 '{index}' pour raisonner sur des décisions entières, '{legi_index}' pour le texte des articles \
+                 des codes en vigueur."
             )
         }
     });
@@ -183,6 +185,15 @@ pub async fn apply_chat(meili: &MeiliClient, config: &ChatConfig<'_>) -> Result<
     info!(chunk_index, "configuring chunk index chat settings");
     meili.update_index_chat_settings(chunk_index, &chunk_chat).await?;
 
+    let legi_chat = json!({
+        "description": "Articles en vigueur des codes français (Légifrance/LEGI) : le texte de la règle elle-même, avec son code et sa place dans celui-ci. À interroger pour citer un article, vérifier sa rédaction actuelle ou répondre sur le droit applicable plutôt que sur la jurisprudence.",
+        "documentTemplate": ARTICLE_DOCUMENT_TEMPLATE,
+        "documentTemplateMaxBytes": 4000,
+        "searchParameters": { "limit": 6 }
+    });
+    info!(legi_index, "configuring LEGI index chat settings");
+    meili.update_index_chat_settings(legi_index, &legi_chat).await?;
+
     match meili.find_key_with_action("chatCompletions").await? {
         Some(key) => info!(
             "chat API key (set MEILI_CHAT_KEY in .env for the web app): {}",
@@ -203,6 +214,8 @@ Lorsque la question porte sur une période ou une chambre précise, utilise le p
 Privilégie l'index des passages pour retrouver et citer un motif précis, et l'index des décisions \
 pour une vue d'ensemble ; les passages issus des documents associés (communiqués, rapports, avis) \
 doivent être présentés comme tels et non comme le texte de l'arrêt. \
+Cite le texte d'un article depuis l'index des codes et la jurisprudence depuis celui des décisions, \
+sans confondre les deux. \
 Sois économe en recherches : trois à cinq requêtes bien choisies suffisent presque toujours. \
 Ne relance pas une recherche pour reformuler la même idée, et réponds dès que les décisions \
 trouvées permettent de le faire.";
@@ -211,6 +224,9 @@ trouvées permettent de le faire.";
 /// motivations. voyage-law-2 handles 16K tokens, so 4 000 bytes is comfortable.
 const EMBEDDING_TEMPLATE: &str = "{{doc.jurisdiction}}, {{doc.chamber}}, {{doc.decision_date}}, {{doc.solution}}. \
 {{doc.titles}}. {{doc.summary}} {{doc.excerpt}}";
+
+/// What the assistant sees for each retrieved code article.
+const ARTICLE_DOCUMENT_TEMPLATE: &str = "{{doc.reference}} ({{doc.section}})\n{{doc.text}}";
 
 /// Text embedded per code article: its reference, where it sits in the code, and its rule.
 const ARTICLE_EMBEDDING_TEMPLATE: &str = "{{doc.reference}}. {{doc.hierarchy}}. {{doc.text}}";
