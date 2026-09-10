@@ -19,7 +19,9 @@ pub async fn apply_index_settings(meili: &MeiliClient, index: &str) -> Result<()
             "id",
             "jurisdiction", "chamber", "formation", "publication", "type", "solution",
             "themes", "year", "decision_timestamp", "particular_interest", "location",
-            "files.type"
+            "files.type",
+            // Joins a decision to the LEGI code articles it applies.
+            "visa_refs"
         ],
         "sortableAttributes": ["decision_timestamp"],
         "rankingRules": ["words", "typo", "proximity", "attribute", "sort", "exactness"],
@@ -67,14 +69,25 @@ pub async fn apply_chunk_index_settings(meili: &MeiliClient, index: &str) -> Res
 
 /// Configure a Voyage AI embedder through Meilisearch's generic REST source.
 /// Voyage accepts batched inputs (`input: [...]`) and returns `data[].embedding`.
+/// Which document shape an embedder serves.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EmbedderKind {
+    /// One whole decision.
+    Decision,
+    /// One passage of a decision or of an attached PDF.
+    Chunk,
+    /// One in-force code article.
+    Article,
+}
+
 pub async fn apply_voyage_embedder(
     meili: &MeiliClient,
     index: &str,
     api_key: &str,
     model: &str,
-    chunks: bool,
+    kind: EmbedderKind,
 ) -> Result<()> {
-    info!(index, model, chunks, "configuring Voyage AI embedder for hybrid search");
+    info!(index, model, ?kind, "configuring Voyage AI embedder for hybrid search");
     let embedders = json!({
         EMBEDDER_NAME: {
             "source": "rest",
@@ -89,8 +102,16 @@ pub async fn apply_voyage_embedder(
             "response": {
                 "data": [{ "embedding": "{{embedding}}" }, "{{..}}"]
             },
-            "documentTemplate": if chunks { CHUNK_EMBEDDING_TEMPLATE } else { EMBEDDING_TEMPLATE },
-            "documentTemplateMaxBytes": if chunks { 8000 } else { 4000 }
+            "documentTemplate": match kind {
+                EmbedderKind::Decision => EMBEDDING_TEMPLATE,
+                EmbedderKind::Chunk => CHUNK_EMBEDDING_TEMPLATE,
+                EmbedderKind::Article => ARTICLE_EMBEDDING_TEMPLATE,
+            },
+            "documentTemplateMaxBytes": match kind {
+                EmbedderKind::Decision => 4000,
+                EmbedderKind::Chunk => 8000,
+                EmbedderKind::Article => 6000,
+            }
         }
     });
     meili.update_embedders(index, &embedders).await
@@ -190,6 +211,9 @@ trouvées permettent de le faire.";
 /// motivations. voyage-law-2 handles 16K tokens, so 4 000 bytes is comfortable.
 const EMBEDDING_TEMPLATE: &str = "{{doc.jurisdiction}}, {{doc.chamber}}, {{doc.decision_date}}, {{doc.solution}}. \
 {{doc.titles}}. {{doc.summary}} {{doc.excerpt}}";
+
+/// Text embedded per code article: its reference, where it sits in the code, and its rule.
+const ARTICLE_EMBEDDING_TEMPLATE: &str = "{{doc.reference}}. {{doc.hierarchy}}. {{doc.text}}";
 
 /// Text embedded per passage: a short citation header plus the passage itself.
 const CHUNK_EMBEDDING_TEMPLATE: &str = "{{doc.jurisdiction}}, {{doc.chamber}}, {{doc.decision_date}}, pourvoi n° {{doc.number}}. \

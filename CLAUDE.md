@@ -6,12 +6,22 @@ Monorepo with three parts sharing one root `.env` (see `.env.example`):
 - `web/` — Next.js 16 App Router (TypeScript strict, Tailwind v4, shadcn/ui on Base UI, TanStack Query, Zustand). `next.config.ts` loads the root `.env`. Run `pnpm exec tsc --noEmit && pnpm lint` before finishing.
 - `docs/` — Mintlify (`mint.json`, `openapi.yaml` for the web API).
 
-## Two indexes
+## Three indexes
 
-- `judilibre`: one document per decision. Fields defined in `indexer/src/transform.rs`, mirrored in `web/lib/types.ts`.
+- `judilibre`: one document per decision (Judilibre API). Fields in `indexer/src/transform.rs`, mirrored in `web/lib/types.ts`.
 - `judilibre_chunk`: ~2 000-character passages of each decision and of each attached PDF, with `distinctAttribute: decision_id`. Fields in `indexer/src/chunk.rs`, mirrored as `ChunkHit`.
+- `legi`: in-force articles of the French codes, parsed from the LEGI bulk archive (DILA). Fields in `indexer/src/legi.rs`.
 
-Keep the Rust structs and the TypeScript types in sync. Both indexes carry the same Voyage AI embedder (`voyage`, model `voyage-law-2`) via Meilisearch's `rest` source.
+Keep the Rust structs and the TypeScript types in sync. All three carry the same Voyage AI embedder (`voyage`, model `voyage-law-2`) via Meilisearch's `rest` source, with a per-shape `documentTemplate` (`EmbedderKind`).
+
+## Cross-linking decisions and articles
+
+`indexer/src/refs.rs` reduces both corpora to one key, `code-du-travail:L1152-1`:
+
+- a decision's `visa` is prose ("Articles L. 461-1 et L. 461-3 du code de l'urbanisme") whose link is a Légifrance **search** URL, never a `LEGIARTI` id, so the join is on normalised references, not ids;
+- `Document.visa_refs` holds those keys and is filterable, so an article can list the decisions applying it, and a decision can resolve its articles.
+
+Subdivision numbers ("alinéa 1", "§ 3") must not be read as article numbers — `refs.rs` strips them.
 
 ## Gotchas learned the hard way
 

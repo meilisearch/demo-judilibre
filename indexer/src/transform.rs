@@ -30,6 +30,9 @@ pub struct Document {
     pub themes: Vec<String>,
     /// Applied legal texts (titles only).
     pub visa: Vec<String>,
+    /// Normalised keys of the code articles the visa cites, e.g.
+    /// `code-du-travail:L1152-1`. Joins a decision to the LEGI index.
+    pub visa_refs: Vec<String>,
     pub files: Vec<FileLink>,
     pub rapprochements: Vec<DecisionLink>,
     pub particular_interest: bool,
@@ -142,7 +145,7 @@ fn zone_text(text: &str, zones: Option<&Value>, zone: &str) -> String {
 /// Judilibre embeds links in some text fields (notably `visa`, where articles point to
 /// Legifrance). Strip tags and decode the few entities that appear, so indexed and
 /// displayed text stays plain.
-fn strip_html(raw: &str) -> String {
+pub fn strip_html(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     let mut depth = 0usize;
     for c in raw.chars() {
@@ -263,7 +266,7 @@ pub fn to_document(raw: &Value) -> Option<Document> {
         })
         .unwrap_or_default();
 
-    let visa = raw
+    let visa: Vec<String> = raw
         .get("visa")
         .and_then(Value::as_array)
         .map(|a| {
@@ -273,6 +276,16 @@ pub fn to_document(raw: &Value) -> Option<Document> {
                 .collect()
         })
         .unwrap_or_default();
+
+    // Normalised article keys, so a decision and a LEGI article can find each other.
+    let mut visa_refs: Vec<String> = Vec::new();
+    for line in &visa {
+        for key in crate::refs::visa_references(line) {
+            if !visa_refs.contains(&key) {
+                visa_refs.push(key);
+            }
+        }
+    }
 
     Some(Document {
         text_length: text.chars().count(),
@@ -296,6 +309,7 @@ pub fn to_document(raw: &Value) -> Option<Document> {
         visa,
         files,
         rapprochements,
+        visa_refs,
         particular_interest: raw.get("particularInterest").and_then(Value::as_bool).unwrap_or(false),
         location: str_field(raw, "location"),
         bulletin: str_field(raw, "bulletin"),
@@ -395,6 +409,22 @@ mod tests {
         assert_eq!(strip_html("a &amp; b"), "a & b");
         assert_eq!(strip_html("<p>a</p>  <p>b</p>"), "a b");
         assert_eq!(strip_html(""), "");
+    }
+
+    #[test]
+    fn extracts_visa_reference_keys() {
+        let mut v = sample();
+        v["visa"] = json!([
+            { "title": "Article L. 1152-1 du code du travail." },
+            { "title": "Articles 2219 et 2224 du code civil." },
+            { "title": "Article 2 de la Déclaration des droits de l'homme." }
+        ]);
+        let doc = to_document(&v).unwrap();
+        assert_eq!(doc.visa_refs, vec![
+            "code-du-travail:L1152-1",
+            "code-civil:2219",
+            "code-civil:2224"
+        ]);
     }
 
     #[test]
