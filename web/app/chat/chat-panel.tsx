@@ -234,21 +234,25 @@ function AssistantMessage({ turn }: { turn: AssistantTurn }) {
   const current = turn.steps.at(-1);
   return (
     <div className="flex gap-3">
+      {/* The spinner replaces the icon rather than preceding the text, so the
+          live search line starts at the same x as the answer that replaces it. */}
       <div className="bg-secondary text-secondary-foreground mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full">
-        <Scale className="size-4" aria-hidden />
+        {turn.pending ? <Spinner className="size-4" /> : <Scale className="size-4" aria-hidden />}
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-3">
         {turn.pending ? (
           // One live line, rewritten as each search runs, instead of a growing list.
-          <p className="text-muted-foreground flex min-w-0 items-center gap-2 text-sm" aria-live="polite">
-            <Spinner />
+          <p
+            className="text-muted-foreground mt-0.5 flex min-h-7 min-w-0 items-center gap-2 text-sm"
+            aria-live="polite"
+          >
             {current?.query ? (
               <>
                 <span className="shrink-0">Lecture des décisions</span>
                 <span className="min-w-0 truncate italic">« {current.query} »</span>
               </>
             ) : (
-              <span>Recherche dans Judilibre…</span>
+              <span>Recherche dans les codes et la jurisprudence…</span>
             )}
           </p>
         ) : turn.steps.length > 0 ? (
