@@ -21,7 +21,19 @@ Keep the Rust structs and the TypeScript types in sync. All three carry the same
 - a decision's `visa` is prose ("Articles L. 461-1 et L. 461-3 du code de l'urbanisme") whose link is a Légifrance **search** URL, never a `LEGIARTI` id, so the join is on normalised references, not ids;
 - `Document.visa_refs` holds those keys and is filterable, so an article can list the decisions applying it, and a decision can resolve its articles.
 
-Subdivision numbers ("alinéa 1", "§ 3") must not be read as article numbers — `refs.rs` strips them.
+What `refs.rs` has to defend against, all seen in real visas:
+
+- subdivision numbers — "alinéa 1", "§ 3" — are not article numbers;
+- version qualifiers are not part of a code's title ("du code civil, dans sa rédaction antérieure à l'ordonnance n° 2016-131");
+- one visa may cite several codes ("1355 du code civil et 480 du code de procédure civile"), so each code takes only the numbers stated since the previous one;
+- "et" continues a title only before de/du/des/d'/l' ("code rural et de la pêche maritime"), never before "et les principes…";
+- dates carry numbers ("du 26 août 1789") and must be stripped as a whole, because Code civil article numbers are themselves four digits.
+
+The join is version-blind by construction: a key is a code plus a number, so a decision applying the pre-2016 article 1134 links to today's article 1134, which is a different rule. The article page states this rather than implying otherwise. Note that a *recent* decision can apply an old wording, so comparing dates does not detect it.
+
+## Do not push partial documents to an index with an embedder
+
+`{id, visa_refs}` alone is rejected with `invalid_document_fields`: Meilisearch renders the embedder's `documentTemplate` against the fields supplied, and the template needs `doc.jurisdiction`. Back-filling a derived field therefore means re-pushing whole documents — `load --from <dumps> --no-chunks`, which `load` recomputes the field for. Re-pushing identical text does not re-embed.
 
 ## Gotchas learned the hard way
 

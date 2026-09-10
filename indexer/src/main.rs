@@ -86,14 +86,6 @@ enum Command {
         limit: Option<usize>,
     },
 
-    /// Recompute `visa_refs` for already-indexed decisions from local dumps,
-    /// without re-embedding them.
-    RefreshRefs {
-        /// One or more .jsonl files written by `index --out`
-        #[arg(long = "from", required = true, value_delimiter = ',', value_name = "FILE")]
-        files: Vec<PathBuf>,
-    },
-
     /// Index decisions from local JSON Lines files written by `index --out`.
     Load {
         /// One or more .jsonl files (repeatable, or comma-separated)
@@ -246,11 +238,6 @@ async fn main() -> Result<()> {
         Command::Legi { archive, out, limit } => {
             let stats = legi::run(&meili, &legi_index, &archive, out.as_deref(), limit).await?;
             info!(seen = stats.seen, kept = stats.kept, "legi finished");
-        }
-
-        Command::RefreshRefs { files } => {
-            let n = judilibre::refresh_visa_refs(&meili, &cli.index, &files).await?;
-            info!(decisions = n, "reference keys refreshed");
         }
 
         Command::Load { files, limit, no_chunks } => {

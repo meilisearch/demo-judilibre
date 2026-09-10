@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ChevronRight, ExternalLink, Landmark, Scale } from "lucide-react";
+import { ArrowLeft, ChevronRight, ExternalLink, Info, Landmark, Scale } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -37,7 +38,16 @@ async function getApplyingDecisions(referenceKey: string): Promise<{ hits: Decis
     filter: `visa_refs = '${escaped}'`,
     limit: 20,
     sort: ["decision_timestamp:desc"],
-    attributesToRetrieve: ["id", "jurisdiction", "chamber", "number", "decision_date", "solution", "titles", "summary"],
+      attributesToRetrieve: [
+      "id",
+      "jurisdiction",
+      "chamber",
+      "number",
+      "decision_date",
+      "solution",
+      "titles",
+      "summary",
+    ],
   });
   return { hits: result?.hits ?? [], total: result?.estimatedTotalHits ?? 0 };
 }
@@ -54,6 +64,8 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
   if (!article) notFound();
 
   const { hits: decisions, total } = await getApplyingDecisions(article.reference_key);
+
+
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
@@ -112,6 +124,15 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
                     ? `${total.toLocaleString("fr-FR")} décisions citent cet article ; les ${decisions.length} plus récentes :`
                     : `${total} décision${total > 1 ? "s" : ""} cite${total > 1 ? "nt" : ""} cet article :`}
                 </p>
+                <Alert>
+                  <Info />
+                  <AlertDescription>
+                    Le rapprochement se fait par numéro d&apos;article, sans tenir compte de la version appliquée. Une
+                    décision peut donc viser ce numéro « dans sa rédaction antérieure », c&apos;est-à-dire un texte
+                    différent de celui affiché ci-dessus — la numérotation du code civil a notamment été modifiée par
+                    l&apos;ordonnance du 10 février 2016. Vérifiez la rédaction visée dans la décision.
+                  </AlertDescription>
+                </Alert>
                 <ol className="flex flex-col gap-2">
                   {decisions.map((d) => (
                     <li key={d.id}>
