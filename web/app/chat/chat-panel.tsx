@@ -115,67 +115,70 @@ export function ChatPanel() {
   const sources = dedupeSources(lastAssistant?.steps ?? []);
 
   return (
-    <div className="mx-auto grid w-full max-w-7xl flex-1 gap-8 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <section className="flex min-w-0 flex-col gap-4" aria-label="Conversation">
-        {turns.length === 0 ? (
-          <div className="flex flex-1 flex-col justify-center gap-6 py-10">
-            <div className="flex flex-col gap-2">
-              <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">Assistant jurisprudence</p>
-              <h1 className="font-heading text-3xl leading-tight font-medium tracking-tight sm:text-4xl">
-                Posez votre question, <span className="italic">la Cour répond par ses arrêts</span>.
-              </h1>
-              <p className="text-muted-foreground max-w-2xl text-sm">
-                L&apos;assistant interroge Meilisearch en direct, puis rédige une réponse appuyée sur les décisions
-                trouvées. Chaque source est consultable. Réponse informative, pas un avis juridique.
-              </p>
+    <div className="mx-auto grid h-[calc(100svh-var(--header-height))] w-full max-w-7xl grid-rows-[minmax(0,1fr)] gap-x-8 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <section className="flex min-h-0 min-w-0 flex-col" aria-label="Conversation">
+        {/* The conversation scrolls; the composer below stays put. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto py-6">
+          {turns.length === 0 ? (
+            <div className="flex flex-1 flex-col justify-center gap-6 py-10">
+              <div className="flex flex-col gap-2">
+                <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">Assistant jurisprudence</p>
+                <h1 className="font-heading text-3xl leading-tight font-medium tracking-tight sm:text-4xl">
+                  Posez votre question, <span className="italic">la Cour répond par ses arrêts</span>.
+                </h1>
+                <p className="text-muted-foreground max-w-2xl text-sm">
+                  L&apos;assistant interroge Meilisearch en direct, puis rédige une réponse appuyée sur les décisions
+                  trouvées. Chaque source est consultable. Réponse informative, pas un avis juridique.
+                </p>
+              </div>
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {SUGGESTIONS.map((s) => (
+                  <li key={s}>
+                    <button
+                      type="button"
+                      onClick={() => send(s)}
+                      className="bg-card hover:ring-foreground/25 focus-visible:ring-ring/50 w-full rounded-xl p-4 text-left text-sm leading-relaxed ring-1 ring-foreground/10 transition-shadow outline-none hover:shadow-sm focus-visible:ring-3"
+                    >
+                      {s}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {SUGGESTIONS.map((s) => (
-                <li key={s}>
-                  <button
-                    type="button"
-                    onClick={() => send(s)}
-                    className="bg-card hover:ring-foreground/25 focus-visible:ring-ring/50 w-full rounded-xl p-4 text-left text-sm leading-relaxed ring-1 ring-foreground/10 transition-shadow outline-none hover:shadow-sm focus-visible:ring-3"
-                  >
-                    {s}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <ol className="flex flex-col gap-6">
-            {turns.map((turn) =>
-              turn.role === "user" ? (
-                <li key={turn.id} className="flex justify-end">
-                  <p className="bg-primary text-primary-foreground max-w-[85%] rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed">
-                    {turn.content}
-                  </p>
-                </li>
-              ) : (
-                <li key={turn.id}>
-                  <AssistantMessage turn={turn} />
-                </li>
-              ),
-            )}
-          </ol>
-        )}
+          ) : (
+            <ol className="flex flex-col gap-6">
+              {turns.map((turn) =>
+                turn.role === "user" ? (
+                  <li key={turn.id} className="flex justify-end">
+                    <p className="bg-primary text-primary-foreground max-w-[85%] rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed">
+                      {turn.content}
+                    </p>
+                  </li>
+                ) : (
+                  <li key={turn.id}>
+                    <AssistantMessage turn={turn} />
+                  </li>
+                ),
+              )}
+            </ol>
+          )}
 
-        {setupError ? (
-          <Alert variant="destructive">
-            <AlertCircle />
-            <AlertTitle>Le chat n&apos;est pas configuré</AlertTitle>
-            <AlertDescription>
-              {setupError}. Renseignez <code>CHAT_API_KEY</code> dans <code>.env</code> puis relancez{" "}
-              <code>cargo run -- setup</code> dans <code>indexer/</code>.
-            </AlertDescription>
-          </Alert>
-        ) : null}
+          {setupError ? (
+            <Alert variant="destructive">
+              <AlertCircle />
+              <AlertTitle>Le chat n&apos;est pas configuré</AlertTitle>
+              <AlertDescription>
+                {setupError}. Renseignez <code>CHAT_API_KEY</code> dans <code>.env</code> puis relancez{" "}
+                <code>cargo run -- setup</code> dans <code>indexer/</code>.
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
-        <div ref={bottomRef} />
+          <div ref={bottomRef} />
+        </div>
 
         <form
-          className="sticky bottom-4 mt-auto"
+          className="shrink-0 pb-6"
           onSubmit={(e) => {
             e.preventDefault();
             void send(input);
@@ -211,19 +214,22 @@ export function ChatPanel() {
         </form>
       </section>
 
-      <aside aria-label="Sources" className="hidden lg:flex lg:flex-col lg:gap-3 lg:sticky lg:top-20 lg:self-start">
-        <h2 className="text-xs font-semibold tracking-wider uppercase">Sources citées</h2>
-        {sources.length === 0 ? (
-          <p className="text-muted-foreground text-sm">Les décisions retrouvées par Meilisearch pour la dernière réponse apparaîtront ici.</p>
-        ) : (
-          <ol className="flex flex-col gap-2">
-            {sources.map((doc, i) => (
-              <li key={doc.id}>
-                <SourceCard doc={doc} index={i + 1} />
-              </li>
-            ))}
-          </ol>
-        )}
+      <aside aria-label="Sources" className="hidden min-h-0 border-l pl-8 lg:flex lg:flex-col">
+        <h2 className="shrink-0 py-6 text-xs font-semibold tracking-wider uppercase">Sources citées</h2>
+        {/* Scrolls independently of the conversation: a long answer never buries its sources. */}
+        <div className="min-h-0 flex-1 overflow-y-auto pb-6">
+          {sources.length === 0 ? (
+            <p className="text-muted-foreground text-sm">Les décisions retrouvées par Meilisearch pour la dernière réponse apparaîtront ici.</p>
+          ) : (
+            <ol className="flex flex-col gap-2">
+              {sources.map((doc, i) => (
+                <li key={doc.id}>
+                  <SourceCard doc={doc} index={i + 1} />
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       </aside>
     </div>
   );

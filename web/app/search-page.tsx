@@ -135,7 +135,6 @@ export function SearchPage() {
         processingTimeMs={search.data?.processingTimeMs}
         isFetching={search.isFetching}
         aiAvailable={Boolean(search.data?.embedder)}
-        hasArticles={Boolean(search.data?.hasArticles)}
       />
 
       {search.isError ? (
