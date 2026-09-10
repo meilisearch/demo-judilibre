@@ -34,6 +34,8 @@ export interface Decision {
   titles: string[];
   themes: string[];
   visa: string[];
+  /** Normalised keys of the code articles cited by the visa. */
+  visa_refs: string[];
   files: FileLink[];
   rapprochements: DecisionLink[];
   particular_interest: boolean;
@@ -59,6 +61,34 @@ export interface DecisionFormatted {
 
 export type SearchHit = DecisionHit & { _formatted?: DecisionFormatted };
 
+/** An in-force article of a French code (see indexer/src/legi.rs). */
+export interface Article {
+  id: string;
+  code: string;
+  code_id: string;
+  number: string;
+  reference: string;
+  reference_key: string;
+  hierarchy: string[];
+  section: string;
+  text: string;
+  text_length: number;
+  date_debut: string;
+  date_debut_timestamp: number;
+  year: number;
+  url: string;
+}
+
+export interface ArticleFormatted {
+  reference?: string;
+  number?: string;
+  code?: string;
+  section?: string;
+  text?: string;
+}
+
+export type ArticleHit = Article & { _formatted?: ArticleFormatted };
+
 export const FACET_ATTRIBUTES = [
   "chamber",
   "solution",
@@ -69,7 +99,10 @@ export const FACET_ATTRIBUTES = [
   "themes",
 ] as const;
 
-export type FacetAttribute = (typeof FACET_ATTRIBUTES)[number];
+/** Facets of the code-article index: a code and its sections, not a chamber. */
+export const LEGI_FACET_ATTRIBUTES = ["code", "section", "year"] as const;
+
+export type FacetAttribute = (typeof FACET_ATTRIBUTES)[number] | (typeof LEGI_FACET_ATTRIBUTES)[number];
 
 export type FacetDistribution = Partial<Record<FacetAttribute, Record<string, number>>>;
 
@@ -77,41 +110,11 @@ export interface SearchConfig {
   host: string;
   apiKey: string;
   index: string;
-  /** Passage index, or null when no passages are indexed. */
-  chunkIndex: string | null;
+  /** Code-article index, or null when no articles are indexed. */
+  legiIndex: string | null;
+  legiEmbedder: string | null;
   /** Embedder name when hybrid (semantic) search is configured on the index. */
   embedder: string | null;
-  chunkEmbedder: string | null;
-}
-
-/** A passage of a decision, from the chunk index. */
-export interface ChunkHit {
-  id: string;
-  decision_id: string;
-  chunk_index: number;
-  chunk_count: number;
-  /** `decision` or `attachment`. */
-  source: string;
-  attachment_name: string;
-  attachment_type: string;
-  attachment_url: string;
-  content: string;
-  content_chars: number;
-  jurisdiction: string;
-  chamber: string;
-  formation: string;
-  number: string;
-  ecli: string;
-  publication: string[];
-  decision_date: string;
-  year: number;
-  type: string;
-  solution: string;
-  titles: string[];
-  themes: string[];
-  summary: string;
-  url: string;
-  _formatted?: { content?: string; titles?: string[]; summary?: string; number?: string };
 }
 
 /** Highlight marker tags used with Meilisearch so we never inject HTML. */

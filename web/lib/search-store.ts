@@ -3,8 +3,12 @@ import type { FacetAttribute } from "@/lib/types";
 
 export type SortOption = "relevance" | "date_desc" | "date_asc";
 export type SearchMode = "keyword" | "hybrid";
-/** Search whole decisions, or the passages extracted from them and their PDFs. */
-export type SearchScope = "decisions" | "passages";
+/**
+ * Which corpus is being searched: the in-force articles of the French codes, or
+ * the decisions. The passage index still exists — it is what a passage search
+ * would use — but it is neither browsed nor offered to the assistant.
+ */
+export type SearchScope = "articles" | "decisions";
 
 /** Above this many words, a query reads as a sentence rather than a set of keywords. */
 const NATURAL_LANGUAGE_WORDS = 5;
@@ -49,7 +53,8 @@ export const useSearchStore = create<SearchState>((set) => ({
   sort: "relevance",
   mode: "keyword",
   modePinned: false,
-  scope: "decisions",
+  // Codes is the first tab: the law before its application.
+  scope: "articles",
   page: 1,
   setQuery: (query) =>
     set((state) => ({

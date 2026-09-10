@@ -20,6 +20,7 @@ export const serverEnv = {
   documentsKey: process.env.MEILI_DOCUMENTS_KEY ?? "",
   index,
   chunkIndex: process.env.MEILI_CHUNK_INDEX || `${index}_chunk`,
+  legiIndex: process.env.MEILI_LEGI_INDEX || "legi",
   /** Embedder name on both indexes; empty disables the hybrid-search toggle. */
   embedderName: process.env.MEILI_EMBEDDER ?? "voyage",
   chatWorkspace: process.env.CHAT_WORKSPACE ?? "judilibre",
@@ -52,7 +53,7 @@ export async function getSearchKey(): Promise<string> {
   if (!serverEnv.masterKey) return serverEnv.searchKey;
   if (searchKeyCache && Date.now() - searchKeyCache.at < 10 * 60_000) return searchKeyCache.value;
 
-  const needed = [serverEnv.index, serverEnv.chunkIndex];
+  const needed = [serverEnv.index, serverEnv.chunkIndex, serverEnv.legiIndex];
   const res = await fetch(`${serverEnv.meiliUrl}/keys?limit=100`, {
     headers: { Authorization: `Bearer ${serverEnv.masterKey}` },
     cache: "no-store",
@@ -129,13 +130,14 @@ export async function getEmbedderName(indexUid = serverEnv.index): Promise<strin
   return value;
 }
 
-let chunksCache: { value: boolean; at: number } | null = null;
+const populatedCache = new Map<string, { value: boolean; at: number }>();
 
-/** Whether the passage index exists and holds documents (search key is enough). */
-export async function getChunkIndexAvailable(): Promise<boolean> {
-  if (chunksCache && Date.now() - chunksCache.at < 60_000) return chunksCache.value;
-  const result = await meiliSearch<unknown>(serverEnv.chunkIndex, { q: "", limit: 0 }).catch(() => null);
+/** Whether an index exists and holds documents (a search key is enough). */
+export async function getIndexPopulated(indexUid: string): Promise<boolean> {
+  const cached = populatedCache.get(indexUid);
+  if (cached && Date.now() - cached.at < 60_000) return cached.value;
+  const result = await meiliSearch<unknown>(indexUid, { q: "", limit: 0 }).catch(() => null);
   const value = Boolean(result) && (result?.estimatedTotalHits ?? 0) > 0;
-  chunksCache = { value, at: Date.now() };
+  populatedCache.set(indexUid, { value, at: Date.now() });
   return value;
 }

@@ -9,17 +9,19 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { facetLabel, formatCount } from "@/lib/format";
 import { useSearchStore } from "@/lib/search-store";
-import { FACET_ATTRIBUTES, type FacetAttribute, type FacetDistribution } from "@/lib/types";
+import { type FacetAttribute, type FacetDistribution } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const VISIBLE = 6;
 
 interface Props {
   distribution?: FacetDistribution;
+  /** Facets of the corpus being searched: a chamber for decisions, a code for articles. */
+  attributes: readonly FacetAttribute[];
   loading: boolean;
 }
 
-export function Facets({ distribution, loading }: Props) {
+export function Facets({ distribution, attributes, loading }: Props) {
   const { filters, clearFilters } = useSearchStore();
   const activeCount = Object.values(filters).reduce((n, v) => n + (v?.length ?? 0), 0);
 
@@ -33,7 +35,7 @@ export function Facets({ distribution, loading }: Props) {
           </Button>
         ) : null}
       </div>
-      {FACET_ATTRIBUTES.map((attr, i) => (
+      {attributes.map((attr, i) => (
         <div key={attr} className="flex flex-col gap-3">
           {i > 0 ? <Separator /> : null}
           <FacetGroup attr={attr} values={distribution?.[attr]} loading={loading} />

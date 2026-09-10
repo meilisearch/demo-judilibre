@@ -1,14 +1,14 @@
 "use client";
 
-import { ArrowDownWideNarrow, ChevronLeft, ChevronRight, FileSearch, Quote, ScrollText } from "lucide-react";
+import { ArrowDownWideNarrow, ChevronLeft, ChevronRight, FileSearch, Landmark, ScrollText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type SearchScope, type SortOption, useSearchStore } from "@/lib/search-store";
+import { ArticleCard } from "@/app/article-card";
 import { HitCard } from "@/app/hit-card";
-import { PassageCard } from "@/app/passage-card";
 import { HITS_PER_PAGE, type SearchResult } from "@/app/search-page";
 
 interface Props {
@@ -29,7 +29,7 @@ export function Results({ result, loading }: Props) {
   return (
     <section aria-label="Résultats" className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        {result?.hasPassages ? (
+        {result?.hasArticles ? (
           <ToggleGroup
             value={[scope]}
             onValueChange={(v: string[]) => {
@@ -38,15 +38,15 @@ export function Results({ result, loading }: Props) {
             }}
             variant="outline"
             size="sm"
-            aria-label="Portée de la recherche"
+            aria-label="Corpus interrogé"
           >
+            <ToggleGroupItem value="articles">
+              <Landmark data-icon="inline-start" />
+              Codes
+            </ToggleGroupItem>
             <ToggleGroupItem value="decisions">
               <ScrollText data-icon="inline-start" />
               Décisions
-            </ToggleGroupItem>
-            <ToggleGroupItem value="passages">
-              <Quote data-icon="inline-start" />
-              Passages
             </ToggleGroupItem>
           </ToggleGroup>
         ) : (
@@ -56,6 +56,7 @@ export function Results({ result, loading }: Props) {
           <p className="text-muted-foreground text-xs">
             {result && result.totalPages > 0 ? `Page ${page} sur ${result.totalPages}` : " "}
           </p>
+          {scope === "articles" ? null : (
           <Select value={sort} onValueChange={(v: string | null) => {
               if (v) setSort(v as SortOption);
             }}>
@@ -73,6 +74,7 @@ export function Results({ result, loading }: Props) {
               </SelectGroup>
             </SelectContent>
           </Select>
+          )}
         </div>
       </div>
 
@@ -87,7 +89,7 @@ export function Results({ result, loading }: Props) {
             </div>
           ))}
         </div>
-      ) : result && result.hits.length === 0 && result.passages.length === 0 ? (
+      ) : result && result.hits.length === 0 && result.articles.length === 0 ? (
         <Empty className="border">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -95,8 +97,8 @@ export function Results({ result, loading }: Props) {
             </EmptyMedia>
             <EmptyTitle>
               {hasCriteria
-                ? scope === "passages"
-                  ? "Aucun passage ne correspond"
+                ? scope === "articles"
+                  ? "Aucun article ne correspond"
                   : "Aucune décision ne correspond"
                 : "L'index est vide"}
             </EmptyTitle>
@@ -114,9 +116,9 @@ export function Results({ result, loading }: Props) {
               <HitCard hit={hit} position={(page - 1) * HITS_PER_PAGE + i + 1} />
             </li>
           ))}
-          {result?.passages.map((hit, i) => (
+          {result?.articles.map((hit, i) => (
             <li key={hit.id}>
-              <PassageCard hit={hit} position={(page - 1) * HITS_PER_PAGE + i + 1} />
+              <ArticleCard hit={hit} position={(page - 1) * HITS_PER_PAGE + i + 1} />
             </li>
           ))}
         </ol>

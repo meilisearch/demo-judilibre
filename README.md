@@ -70,6 +70,19 @@ cargo run -- index --updated --date-start 2025-01-01   # incremental sync: decis
 - `/chat` streaming assistant. `/api/chat` proxies to Meilisearch `POST /chats/{workspace}/chat/completions`; search steps and retrieved decisions are rendered as sources.
 - `/decision/[id]` full decision: sommaire, titrage, textes appliqués, documents associés, rapprochements, texte intégral, and the text extracted from each attached PDF.
 
+## Legislation (LEGI)
+
+Judilibre gives case law; the codes themselves come from DILA's bulk archive, which — unlike Judilibre — is a plain download.
+
+```bash
+curl -O https://echanges.dila.gouv.fr/OPENDATA/LEGI/Freemium_legi_global_20250713-140000.tar.gz
+cd indexer && cargo run --release -- legi --archive ../Freemium_legi_global_20250713-140000.tar.gz
+```
+
+The archive holds 5.25M XML files; it is streamed once, never extracted. Of the 488 906 article files under the in-force code tree, **161 296** are kept: the others are superseded versions, uncodified texts, or amending provisions with no substantive rule. That yields 77 codes, median article length 490 characters, about $5 of Voyage embeddings.
+
+Decisions and articles are cross-linked on a normalised reference key (`code-du-travail:L1152-1`), so an article lists the decisions applying it and a decision resolves the articles it applies. See `indexer/src/refs.rs`.
+
 ## Deploy
 
 Only `web/` is deployed. The deployed app runs on two scoped Meilisearch keys and **no admin key**: a search-only key for the browser and a `documents.get` key for the decision page.

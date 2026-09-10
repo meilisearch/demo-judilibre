@@ -24,6 +24,15 @@ use crate::transform::{Document, to_document};
 /// Elasticsearch-style deep pagination cap on the Judilibre side.
 pub const MAX_WINDOW_TOTAL: u64 = 10_000;
 
+/// Retries per request. A full-corpus export makes thousands of calls and PISTE
+/// returns sporadic 500s and connection resets, so give up only after a while.
+const MAX_ATTEMPTS: u32 = 12;
+
+/// Exponential backoff capped at a minute.
+fn backoff(attempt: u32) -> Duration {
+    Duration::from_secs(2u64.pow(attempt.min(6)).min(60))
+}
+
 /// Approximate JSON payload size per Meilisearch document batch.
 const MEILI_PAYLOAD_BUDGET: usize = 20 * 1024 * 1024;
 
@@ -216,11 +225,11 @@ impl JudilibreClient {
                     );
                 }
                 Ok(r) if r.status() == StatusCode::TOO_MANY_REQUESTS || r.status().is_server_error() => {
-                    if attempt > 6 {
+                    if attempt > MAX_ATTEMPTS {
                         bail!("Judilibre keeps failing ({}) after {attempt} attempts", r.status());
                     }
-                    let wait = Duration::from_secs(2u64.pow(attempt.min(5)));
-                    warn!(status = %r.status(), ?wait, "Judilibre throttled, backing off");
+                    let wait = backoff(attempt);
+                    warn!(status = %r.status(), ?wait, attempt, "Judilibre throttled, backing off");
                     tokio::time::sleep(wait).await;
                 }
                 Ok(r) => {
@@ -228,9 +237,10 @@ impl JudilibreClient {
                     let body = r.text().await.unwrap_or_default();
                     bail!("Judilibre export failed with {status}: {body}");
                 }
-                Err(e) if attempt <= 6 => {
-                    warn!(error = %e, "Judilibre request error, retrying");
-                    tokio::time::sleep(Duration::from_secs(2u64.pow(attempt.min(5)))).await;
+                Err(e) if attempt <= MAX_ATTEMPTS => {
+                    let wait = backoff(attempt);
+                    warn!(error = %e, ?wait, attempt, "Judilibre request error, retrying");
+                    tokio::time::sleep(wait).await;
                 }
                 Err(e) => return Err(e).context("Judilibre request failed"),
             }
@@ -442,10 +452,20 @@ pub async fn load_from_files(
             if line.trim().is_empty() {
                 continue;
             }
-            let doc: Document = serde_json::from_str(&line)
+            let mut doc: Document = serde_json::from_str(&line)
                 .with_context(|| format!("{}:{}: malformed decision", path.display(), n + 1))?;
             if doc.id.is_empty() || !seen.insert(doc.id.clone()) {
                 continue;
+            }
+            // Derived from `visa`; recompute so an older dump gains newer keys.
+            if doc.visa_refs.is_empty() && !doc.visa.is_empty() {
+                for v in &doc.visa {
+                    for key in crate::refs::visa_references(v) {
+                        if !doc.visa_refs.contains(&key) {
+                            doc.visa_refs.push(key);
+                        }
+                    }
+                }
             }
             if targets.chunk_index.is_some() {
                 let chunks = chunk_document(&doc);

@@ -61,14 +61,35 @@ impl MeiliClient {
         Ok(())
     }
 
-    /// Wait for a task to succeed. Fails if the task fails.
+    /// Wait for a task to succeed. Fails if the task itself fails.
+    ///
+    /// Polling can run for a long time on a large embedding batch, so transient
+    /// network errors are retried rather than losing an already-accepted push.
     pub async fn wait_for_task(&self, uid: u64) -> Result<()> {
+        let mut errors = 0u32;
         loop {
-            let task: Task = self.send_json(self.request(Method::GET, &format!("/tasks/{uid}"))).await?;
-            match task.status.as_str() {
-                "succeeded" => return Ok(()),
-                "failed" | "canceled" => bail!("Meilisearch task {uid} {}: {:?}", task.status, task.error),
-                _ => tokio::time::sleep(Duration::from_millis(500)).await,
+            match self
+                .send_json::<Task>(self.request(Method::GET, &format!("/tasks/{uid}")))
+                .await
+            {
+                Ok(task) => {
+                    errors = 0;
+                    match task.status.as_str() {
+                        "succeeded" => return Ok(()),
+                        "failed" | "canceled" => {
+                            bail!("Meilisearch task {uid} {}: {:?}", task.status, task.error)
+                        }
+                        _ => tokio::time::sleep(Duration::from_millis(500)).await,
+                    }
+                }
+                Err(e) => {
+                    errors += 1;
+                    if errors > 20 {
+                        return Err(e).with_context(|| format!("polling Meilisearch task {uid}"));
+                    }
+                    warn!(error = %e, task = uid, errors, "task polling failed, retrying");
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
             }
         }
     }

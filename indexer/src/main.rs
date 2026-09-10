@@ -1,6 +1,8 @@
 mod attachments;
 mod chunk;
 mod judilibre;
+mod legi;
+mod refs;
 mod meili;
 mod settings;
 mod transform;
@@ -35,6 +37,10 @@ struct Cli {
     #[arg(long, env = "MEILI_CHUNK_INDEX")]
     chunk_index: Option<String>,
 
+    /// Index holding the LEGI code articles.
+    #[arg(long, env = "MEILI_LEGI_INDEX", default_value = "legi")]
+    legi_index: String,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -64,6 +70,20 @@ enum Command {
         /// Skip chat configuration (search only)
         #[arg(long)]
         no_chat: bool,
+    },
+
+    /// Parse the LEGI bulk archive (codes and legislation) and index the
+    /// in-force code articles.
+    Legi {
+        /// Path to Freemium_legi_global_*.tar.gz from echanges.dila.gouv.fr
+        #[arg(long, value_name = "FILE")]
+        archive: PathBuf,
+        /// Write articles to this JSON Lines file instead of Meilisearch
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
+        /// Stop after this many articles
+        #[arg(long)]
+        limit: Option<usize>,
     },
 
     /// Index decisions from local JSON Lines files written by `index --out`.
@@ -156,6 +176,7 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
     let meili = MeiliClient::new(&cli.meili_url, non_empty(cli.meili_key.as_deref()))?;
+    let legi_index = cli.legi_index.clone();
     let chunk_index = cli
         .chunk_index
         .clone()
@@ -175,10 +196,13 @@ async fn main() -> Result<()> {
         } => {
             settings::apply_index_settings(&meili, &cli.index).await?;
             settings::apply_chunk_index_settings(&meili, &chunk_index).await?;
+            legi::apply_settings(&meili, &legi_index).await?;
             let embedder = match non_empty(voyage_api_key.as_deref()) {
                 Some(key) => {
-                    settings::apply_voyage_embedder(&meili, &cli.index, key, &voyage_model, false).await?;
-                    settings::apply_voyage_embedder(&meili, &chunk_index, key, &voyage_model, true).await?;
+                    use settings::EmbedderKind;
+                    settings::apply_voyage_embedder(&meili, &cli.index, key, &voyage_model, EmbedderKind::Decision).await?;
+                    settings::apply_voyage_embedder(&meili, &chunk_index, key, &voyage_model, EmbedderKind::Chunk).await?;
+                    settings::apply_voyage_embedder(&meili, &legi_index, key, &voyage_model, EmbedderKind::Article).await?;
                     Some(settings::EMBEDDER_NAME.to_string())
                 }
                 None => {
@@ -198,6 +222,7 @@ async fn main() -> Result<()> {
                     &settings::ChatConfig {
                         index: &cli.index,
                         chunk_index: &chunk_index,
+                        legi_index: &legi_index,
                         workspace: &workspace,
                         source: &chat_source,
                         api_key,
@@ -208,6 +233,11 @@ async fn main() -> Result<()> {
                 .await?;
             }
             info!("setup complete");
+        }
+
+        Command::Legi { archive, out, limit } => {
+            let stats = legi::run(&meili, &legi_index, &archive, out.as_deref(), limit).await?;
+            info!(seen = stats.seen, kept = stats.kept, "legi finished");
         }
 
         Command::Load { files, limit, no_chunks } => {

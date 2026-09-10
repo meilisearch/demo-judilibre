@@ -5,9 +5,22 @@ description: Search-as-you-type straight from the browser.
 
 The search page (`/`) is a client component that queries Meilisearch directly with `meilisearch-js`. It never sees the master key: `GET /api/config` returns the public Meilisearch URL and the default **search-only** API key.
 
-## Scope and modes
+## Corpus and modes
 
-The **Décisions / Passages** switch above the filters chooses the index: `judilibre` (one hit per decision) or `judilibre_chunk` (one best passage per decision, thanks to `distinctAttribute`). The **IA** button on the right of the search field turns on hybrid search (`semanticRatio: 0.6`) using the Voyage embedder; it only appears when an embedder is configured on the index being queried.
+The switch above the filters chooses which index is queried:
+
+| Toggle | Index | One hit is |
+|---|---|---|
+| Codes (default) | `legi` | an in-force article of a French code |
+| Décisions | `judilibre` | a whole decision |
+
+The passage index `judilibre_chunk` is still built, but it is no longer browsed: it proved the least useful of the three to read through, and offering it alongside the others muddied the assistant's choice of corpus.
+
+Facets follow the corpus: chamber, solution and publication for case law; code and subdivision for articles. The **IA** button on the right of the search field turns on hybrid search (`semanticRatio: 0.6`) using the Voyage embedder; it only appears when an embedder is configured on the index being queried. Sorting by date is hidden in the Codes corpus, where it carries no meaning.
+
+## Cross-links
+
+`/article/[id]` shows an article, its place in the code, and **the decisions that apply it** — a filter on the decisions' `visa_refs`. Conversely `/decision/[id]` links its "textes appliqués" to the matching indexed articles. Both directions rely on the normalised reference key described in [Indexing](/indexing).
 
 ## Query
 
