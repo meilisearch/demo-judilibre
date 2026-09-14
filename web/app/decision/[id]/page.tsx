@@ -77,92 +77,37 @@ export default async function DecisionPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
-      <Button variant="ghost" size="sm" className="-ml-2 mb-4" nativeButton={false} render={<Link href="/" />}>
+      <Button variant="ghost" size="sm" className="-ml-2 mb-4 max-sm:h-10 max-sm:px-3" nativeButton={false} render={<Link href="/" />}>
         <ArrowLeft data-icon="inline-start" />
         Retour à la recherche
       </Button>
 
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <article className="flex min-w-0 flex-col gap-6">
-          <header className="flex flex-col gap-3">
-            <p className="text-muted-foreground font-mono text-xs tabular-nums">{citation(d)}</p>
-            <h1 className="font-heading text-3xl leading-tight font-medium tracking-tight sm:text-4xl">
-              {d.titles.length > 0 ? d.titles.join(" — ") : `${d.type || "Décision"} ${d.number}`}
-            </h1>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {d.solution ? <Badge>{d.solution}</Badge> : null}
-              {d.publication.map((p) => (
-                <Badge key={p} variant="outline">
-                  {p}
-                </Badge>
-              ))}
-              {d.particular_interest ? (
-                <Badge variant="outline" className="text-seal border-seal/40">
-                  <Star className="fill-current" aria-hidden />
-                  Intérêt particulier
-                </Badge>
-              ) : null}
-            </div>
-          </header>
+      {/* On a phone the aside comes between the title and the text: its dates, applied
+          texts and links are what you want first, not after pages of legal prose.
+          Explicit grid placement keeps the desktop layout exactly as it was. */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-x-10 lg:gap-y-6">
+        <header className="flex flex-col gap-3 lg:col-start-1 lg:row-start-1">
+          <p className="text-muted-foreground font-mono text-xs tabular-nums">{citation(d)}</p>
+          <h1 className="font-heading text-2xl leading-tight font-medium tracking-tight sm:text-4xl">
+            {d.titles.length > 0 ? d.titles.join(" — ") : `${d.type || "Décision"} ${d.number}`}
+          </h1>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {d.solution ? <Badge>{d.solution}</Badge> : null}
+            {d.publication.map((p) => (
+              <Badge key={p} variant="outline">
+                {p}
+              </Badge>
+            ))}
+            {d.particular_interest ? (
+              <Badge variant="outline" className="text-seal border-seal/40">
+                <Star className="fill-current" aria-hidden />
+                Intérêt particulier
+              </Badge>
+            ) : null}
+          </div>
+        </header>
 
-          {d.summary ? (
-            <section aria-labelledby="sommaire" className="border-seal rounded-r-lg border-l-2 bg-card/60 py-3 pl-4">
-              <h2 id="sommaire" className="text-muted-foreground mb-1 text-xs font-semibold tracking-wider uppercase">
-                Sommaire
-              </h2>
-              <p className="font-heading text-lg leading-relaxed">{d.summary}</p>
-            </section>
-          ) : null}
-
-          {d.themes.length > 0 ? (
-            <section aria-label="Matières" className="flex flex-wrap gap-1.5">
-              {d.themes.map((t) => (
-                <Badge key={t} variant="secondary">
-                  {t}
-                </Badge>
-              ))}
-            </section>
-          ) : null}
-
-          <Separator />
-
-          <section aria-labelledby="texte" className="flex flex-col gap-3">
-            <h2 id="texte" className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-              Texte intégral
-            </h2>
-            <div className="decision-paper decision-text">{d.text}</div>
-          </section>
-
-          {extracted.length > 0 ? (
-            <section aria-labelledby="extraits" className="flex flex-col gap-3">
-              <h2 id="extraits" className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-                Contenu des documents associés
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                Texte extrait des PDF joints à la décision. Il est indexé avec la décision et interrogeable.
-              </p>
-              {extracted.map((f) => (
-                <Collapsible key={f.url}>
-                  <CollapsibleTrigger
-                    className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-full max-w-[46rem] justify-start")}
-                  >
-                    <FileText data-icon="inline-start" />
-                    <span className="truncate">{f.name || f.type}</span>
-                    <span className="text-muted-foreground ml-auto font-mono text-xs">
-                      {f.pages > 0 ? `${f.pages} p.` : ""}
-                    </span>
-                    <ChevronDown data-icon="inline-end" />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="decision-paper decision-text mt-2 text-[0.95rem]">{f.content}</div>
-                  </CollapsibleContent>
-                </Collapsible>
-              ))}
-            </section>
-          ) : null}
-        </article>
-
-        <aside className="flex flex-col gap-6 lg:sticky lg:top-20 lg:self-start">
+        <aside className="flex flex-col gap-6 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:sticky lg:top-20 lg:self-start">
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
             {meta.map(([label, value]) => (
               <div key={label} className="contents">
@@ -250,6 +195,65 @@ export default async function DecisionPage({ params }: { params: Promise<{ id: s
             </section>
           ) : null}
         </aside>
+
+        <article className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-2">
+
+          {d.summary ? (
+            <section aria-labelledby="sommaire" className="border-seal rounded-r-lg border-l-2 bg-card/60 py-3 pl-4">
+              <h2 id="sommaire" className="text-muted-foreground mb-1 text-xs font-semibold tracking-wider uppercase">
+                Sommaire
+              </h2>
+              <p className="font-heading text-lg leading-relaxed">{d.summary}</p>
+            </section>
+          ) : null}
+
+          {d.themes.length > 0 ? (
+            <section aria-label="Matières" className="flex flex-wrap gap-1.5">
+              {d.themes.map((t) => (
+                <Badge key={t} variant="secondary">
+                  {t}
+                </Badge>
+              ))}
+            </section>
+          ) : null}
+
+          <Separator />
+
+          <section aria-labelledby="texte" className="flex flex-col gap-3">
+            <h2 id="texte" className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+              Texte intégral
+            </h2>
+            <div className="decision-paper decision-text">{d.text}</div>
+          </section>
+
+          {extracted.length > 0 ? (
+            <section aria-labelledby="extraits" className="flex flex-col gap-3">
+              <h2 id="extraits" className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                Contenu des documents associés
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                Texte extrait des PDF joints à la décision. Il est indexé avec la décision et interrogeable.
+              </p>
+              {extracted.map((f) => (
+                <Collapsible key={f.url}>
+                  <CollapsibleTrigger
+                    className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-full max-w-[46rem] justify-start")}
+                  >
+                    <FileText data-icon="inline-start" />
+                    <span className="truncate">{f.name || f.type}</span>
+                    <span className="text-muted-foreground ml-auto font-mono text-xs">
+                      {f.pages > 0 ? `${f.pages} p.` : ""}
+                    </span>
+                    <ChevronDown data-icon="inline-end" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="decision-paper decision-text mt-2 text-[0.95rem]">{f.content}</div>
+                  </CollapsibleContent>
+                </Collapsible>
+              ))}
+            </section>
+          ) : null}
+        </article>
       </div>
     </div>
   );

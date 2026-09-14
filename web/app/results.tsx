@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type SearchScope, type SortOption, useSearchStore } from "@/lib/search-store";
+import { FACET_ATTRIBUTES } from "@/lib/types";
+import { MobileFilters } from "@/app/mobile-filters";
 import { ArticleCard } from "@/app/article-card";
 import { HitCard } from "@/app/hit-card";
 import { HITS_PER_PAGE, type SearchResult } from "@/app/search-page";
@@ -28,7 +30,8 @@ export function Results({ result, loading }: Props) {
 
   return (
     <section aria-label="Résultats" className="flex min-w-0 flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      {/* Mobile stacks the corpus switch over a row of controls; from `sm` it is one line. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-3">
         {result?.hasArticles ? (
           <ToggleGroup
             value={[scope]}
@@ -39,12 +42,13 @@ export function Results({ result, loading }: Props) {
             variant="outline"
             size="sm"
             aria-label="Corpus interrogé"
+            className="max-sm:w-full"
           >
-            <ToggleGroupItem value="articles">
+            <ToggleGroupItem value="articles" className="max-sm:h-9 max-sm:flex-1">
               <Landmark data-icon="inline-start" />
               Codes
             </ToggleGroupItem>
-            <ToggleGroupItem value="decisions">
+            <ToggleGroupItem value="decisions" className="max-sm:h-9 max-sm:flex-1">
               <ScrollText data-icon="inline-start" />
               Décisions
             </ToggleGroupItem>
@@ -52,15 +56,23 @@ export function Results({ result, loading }: Props) {
         ) : (
           <span />
         )}
-        <div className="flex items-center gap-3">
-          <p className="text-muted-foreground text-xs">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <MobileFilters
+            distribution={result?.facetDistribution}
+            attributes={result?.facetAttributes ?? FACET_ATTRIBUTES}
+            loading={loading}
+            totalHits={result?.totalHits}
+            scopeNoun={scope === "articles" ? "article" : "décision"}
+          />
+          {/* The pager at the foot of the list already says this; on a phone the room is better spent. */}
+          <p className="text-muted-foreground hidden text-xs sm:block">
             {result && result.totalPages > 0 ? `Page ${page} sur ${result.totalPages}` : " "}
           </p>
           {scope === "articles" ? null : (
           <Select value={sort} onValueChange={(v: string | null) => {
               if (v) setSort(v as SortOption);
             }}>
-            <SelectTrigger size="sm" aria-label="Trier les résultats" className="min-w-[9.5rem]">
+            <SelectTrigger size="sm" aria-label="Trier les résultats" className="min-w-[9.5rem] max-sm:h-9 max-sm:min-w-0 max-sm:flex-1">
               <ArrowDownWideNarrow />
               <SelectValue>{SORT_LABELS[sort]}</SelectValue>
             </SelectTrigger>
@@ -126,14 +138,14 @@ export function Results({ result, loading }: Props) {
 
       {result && result.totalPages > 1 ? (
         <nav aria-label="Pagination" className="flex items-center justify-center gap-2 pt-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+          <Button variant="outline" size="sm" className="max-sm:h-10 max-sm:px-4" disabled={page <= 1} onClick={() => setPage(page - 1)}>
             <ChevronLeft data-icon="inline-start" />
             Précédent
           </Button>
           <span className="text-muted-foreground px-2 font-mono text-xs tabular-nums">
             {page} / {result.totalPages}
           </span>
-          <Button variant="outline" size="sm" disabled={page >= result.totalPages} onClick={() => setPage(page + 1)}>
+          <Button variant="outline" size="sm" className="max-sm:h-10 max-sm:px-4" disabled={page >= result.totalPages} onClick={() => setPage(page + 1)}>
             Suivant
             <ChevronRight data-icon="inline-end" />
           </Button>

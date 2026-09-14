@@ -3,15 +3,16 @@ title: Assistant
 description: Conversational search with Meilisearch chat completions.
 ---
 
-Meilisearch's chat completions endpoint runs the retrieval loop itself: the LLM decides what to search, Meilisearch executes the search on the `decisions` index, and the answer is streamed back as OpenAI-compatible server-sent events.
+Meilisearch's chat completions endpoint runs the retrieval loop itself: the LLM decides what to search, Meilisearch executes the search on the `legi` index of in-force code articles, and the answer is streamed back as OpenAI-compatible server-sent events.
 
 ## Setup performed by the indexer
 
 1. Enables the `chatCompletions` experimental feature.
 2. `PATCH /chats/judilibre/settings` with the provider (`CHAT_SOURCE`), the API key, and French prompts describing when and how to search (`searchDescription`, `searchQParam`, `searchFilterParam`).
-3. `PATCH /indexes/{index}/settings/chat` on **both** indexes, each with its own description and Liquid `documentTemplate`: whole decisions for `judilibre`, and passages for `judilibre_chunk` (a passage template names the attached document when the text comes from a PDF). Hybrid search is enabled on both when the Voyage embedder is configured.
+3. `PATCH /indexes/{index}/settings/chat` on all three indexes, each with its own Liquid `documentTemplate`. Only `legi` carries a `description`; the two decision indexes are set to `""`. Hybrid search is enabled when the Voyage embedder is configured.
+4. Looks for an API key holding `search` + `chatCompletions` **on every index the assistant is offered**, and creates one scoped to exactly those indexes when none does. Set it as `MEILI_CHAT_KEY`.
 
-The system prompt tells the assistant to prefer the passage index when it needs to quote a precise motif, and to present passages taken from attached documents (communiqués, rapports, avis) as such rather than as the wording of the ruling.
+Step 4 is the one that decides the corpus. Neither the prompts nor an empty `description` keeps the assistant away from an index: the model passes an `index_uid` of its own and Meilisearch runs the search whenever the key permits it. The key's index scope is the only hard boundary. The indexes themselves are untouched — the search UI still browses the decisions, and widening the key brings them back into the chat.
 
 <Warning>
 The GPT-5.6 family (`gpt-5.6-luna`, `-sol`, `-terra`) **cannot** be used here. Those models reject function tools on `/v1/chat/completions` unless `reasoning_effort` is `"none"`, and Meilisearch only accepts `low`, `medium` or `high`. Since Meilisearch always sends its internal search tool, every request fails. The default is therefore `gpt-5.5`; `gpt-5.4-mini` is the cheaper, faster option.
@@ -27,11 +28,11 @@ browser ──POST /api/chat {messages}──▶ Next.js route ──POST /chats
 The route declares the three Meilisearch tools so the stream contains:
 
 - `_meiliSearchProgress`: the query, filter and index the model chose. Its arguments carry `function_arguments` (a JSON string), rendered as a single live line that is rewritten on each search, then collapsed into an expandable trace.
-- `_meiliSearchSources`: the retrieved documents, under the `sources` key. Rendered as numbered sources linking to `/decision/[id]`; a passage links to its parent decision through `decision_id`. Sources arrive as whole index documents, so the client keeps only the fields it displays.
+- `_meiliSearchSources`: the retrieved documents, under the `sources` key. Rendered as numbered sources. A document carrying a `code` is an article and links to `/article/[id]`; otherwise it is a decision and links to `/decision/[id]`, a passage reaching its parent through `decision_id`. Sources arrive as whole index documents, so the client keeps only the fields it displays.
 - `_meiliAppendConversationMessage`: internal messages the client must keep and send back with the next turn
 
 The endpoint is stateless, so the client keeps the whole history including those internal messages.
 
 ## System prompt
 
-The assistant answers in French, cites decisions in the conventional form (« Cass. soc., 12 janvier 2024, n° 22-10.123 »), says when the retrieved decisions do not answer the question, and reminds users that the answer is informative rather than legal advice.
+The assistant answers in French, cites articles in the conventional form (« article L. 1152-1 du code du travail »), says when the retrieved articles do not answer the question, and reminds users that the answer is informative rather than legal advice. It is told it has no access to case law, so that it flags an open question instead of citing decisions it never retrieved, and that the articles returned are the ones in force today.

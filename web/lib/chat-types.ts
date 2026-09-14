@@ -35,6 +35,14 @@ export interface SourceDoc {
   files: Array<{ name: string; type: string; url: string }>;
   /** Passage text when the hit comes from the chunk index. */
   content: string;
+  /** Code the article belongs to. Set only on `legi` hits: it tells the two shapes apart. */
+  code: string;
+  /** Ready-made label, e.g. "Article L110-1 du Code de commerce" (`legi` hits). */
+  reference: string;
+  /** Innermost section of the code (`legi` hits). */
+  section: string;
+  /** The article's own text (`legi` hits). */
+  text: string;
 }
 
 export interface SearchStep {

@@ -18,7 +18,7 @@ export function HitCard({ hit, position }: { hit: SearchHit; position: number })
   const snippet = matched ?? fallback;
 
   return (
-    <article className="group bg-card hover:ring-foreground/20 relative flex flex-col gap-2.5 rounded-xl p-5 ring-1 ring-foreground/10 transition-shadow hover:shadow-sm">
+    <article className="group bg-card hover:ring-foreground/20 relative flex flex-col gap-2.5 rounded-xl p-4 ring-1 sm:p-5 ring-foreground/10 transition-shadow hover:shadow-sm">
       <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs tabular-nums">
         <span className="text-foreground font-medium">
           {shortJurisdiction(hit.jurisdiction)} {shortChamber(hit.chamber)}

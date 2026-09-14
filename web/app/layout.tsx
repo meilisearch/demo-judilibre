@@ -37,10 +37,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="flex min-h-full flex-col">
         <Providers>
           <header className="h-(--header-height) border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/70 sticky top-0 z-20">
-            <div className="mx-auto flex h-full w-full max-w-7xl items-center justify-between gap-6 px-4 sm:px-6">
+            <div className="mx-auto flex h-full w-full max-w-7xl items-center justify-between gap-3 px-4 sm:gap-6 sm:px-6">
               <Link href="/" className="flex items-baseline gap-2">
-                <span className="font-heading text-2xl leading-none font-medium tracking-tight">Judilibre</span>
-                <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">× Meilisearch</span>
+                <span className="font-heading text-xl leading-none font-medium tracking-tight sm:text-2xl">Judilibre</span>
+                <span className="text-muted-foreground hidden text-xs font-medium tracking-wide uppercase sm:inline">
+                  × Meilisearch
+                </span>
               </Link>
               <NavLinks />
             </div>

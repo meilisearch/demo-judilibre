@@ -60,6 +60,10 @@ function trimSource(doc: Record<string, unknown>): SourceDoc {
           }))
       : [],
     content: str("content"),
+    code: str("code"),
+    reference: str("reference"),
+    section: str("section"),
+    text: str("text"),
   };
 }
 

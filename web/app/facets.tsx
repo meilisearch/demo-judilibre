@@ -21,12 +21,31 @@ interface Props {
   loading: boolean;
 }
 
-export function Facets({ distribution, attributes, loading }: Props) {
+/**
+ * The facet groups themselves, without a heading or a container: the desktop
+ * sidebar and the mobile filter sheet both render this, so a filter behaves the
+ * same whichever one you opened.
+ */
+export function FacetList({ distribution, attributes, loading }: Props) {
+  return (
+    <>
+      {attributes.map((attr, i) => (
+        <div key={attr} className="flex flex-col gap-3">
+          {i > 0 ? <Separator /> : null}
+          <FacetGroup attr={attr} values={distribution?.[attr]} loading={loading} />
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** Sidebar form of the filters. Hidden below `lg`, where the sheet takes over. */
+export function Facets(props: Props) {
   const { filters, clearFilters } = useSearchStore();
   const activeCount = Object.values(filters).reduce((n, v) => n + (v?.length ?? 0), 0);
 
   return (
-    <aside aria-label="Filtres" className="flex min-w-0 flex-col gap-5 lg:sticky lg:top-20 lg:self-start">
+    <aside aria-label="Filtres" className="hidden min-w-0 flex-col gap-5 lg:sticky lg:top-20 lg:flex lg:self-start">
       <div className="flex items-center justify-between">
         <h2 className="text-xs font-semibold tracking-wider uppercase">Filtres</h2>
         {activeCount > 0 ? (
@@ -35,12 +54,7 @@ export function Facets({ distribution, attributes, loading }: Props) {
           </Button>
         ) : null}
       </div>
-      {attributes.map((attr, i) => (
-        <div key={attr} className="flex flex-col gap-3">
-          {i > 0 ? <Separator /> : null}
-          <FacetGroup attr={attr} values={distribution?.[attr]} loading={loading} />
-        </div>
-      ))}
+      <FacetList {...props} />
     </aside>
   );
 }
@@ -87,7 +101,10 @@ function FacetGroup({ attr, values, loading }: { attr: FacetAttribute; values?: 
             ))}
           </CollapsibleContent>
           <CollapsibleTrigger
-            className={cn(buttonVariants({ variant: "ghost", size: "xs" }), "text-muted-foreground mt-1 -ml-2")}
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "xs" }),
+              "text-muted-foreground mt-1 -ml-2 max-lg:h-10 max-lg:px-3",
+            )}
           >
             <ChevronDown data-icon="inline-start" className={cn("transition-transform", open && "rotate-180")} />
             {open ? "Voir moins" : `Voir ${tail.length} de plus`}
@@ -112,7 +129,8 @@ function FacetOption({
   onToggle: (attr: FacetAttribute, value: string) => void;
 }) {
   return (
-    <label className="hover:text-foreground flex min-w-0 cursor-pointer items-center gap-2 text-sm">
+    // Roomier rows on touch: the sidebar's 20px checkbox is not a 44px target.
+    <label className="hover:text-foreground flex min-w-0 cursor-pointer items-center gap-2 text-sm max-lg:min-h-10 max-lg:gap-3">
       <Checkbox checked={checked} onCheckedChange={() => onToggle(attr, value)} aria-label={value} />
       <span className="min-w-0 flex-1 truncate" title={value}>
         {value}
