@@ -196,21 +196,57 @@ impl MeiliClient {
     }
 
     /// Return the value of the first API key that has the given action (e.g. `chatCompletions`).
-    pub async fn find_key_with_action(&self, action: &str) -> Result<Option<String>> {
+    /// A key confined to exactly the indexes the assistant is offered, with
+    /// `chatCompletions` and `search`.
+    ///
+    /// The index scope is the part that matters and the easy one to miss. A key
+    /// carrying `chatCompletions` but not listing an index cannot search it, so
+    /// the assistant silently falls back to whatever it *can* read — which looks
+    /// like the model ignoring its prompts. The match is on the exact set, not
+    /// on coverage: a wildcard key, or one that also reaches the decisions, would
+    /// satisfy "can search the codes" while leaving the other corpora open, and
+    /// the key is the only thing keeping the assistant out of them.
+    pub async fn find_chat_key(&self, indexes: &[&str]) -> Result<Option<String>> {
         #[derive(Deserialize)]
         struct Key {
             key: String,
             actions: Vec<String>,
+            indexes: Vec<String>,
         }
         #[derive(Deserialize)]
         struct Keys {
             results: Vec<Key>,
         }
         let keys: Keys = self.send_json(self.request(Method::GET, "/keys?limit=100")).await?;
+        let has = |k: &Key, action: &str| k.actions.iter().any(|a| a == "*" || a == action);
+        let mut want: Vec<&str> = indexes.to_vec();
+        want.sort_unstable();
+        let scoped_exactly = |k: &Key| {
+            let mut have: Vec<&str> = k.indexes.iter().map(String::as_str).collect();
+            have.sort_unstable();
+            have == want
+        };
         Ok(keys
             .results
             .into_iter()
-            .find(|k| k.actions.iter().any(|a| a == action))
+            .find(|k| has(k, "chatCompletions") && has(k, "search") && scoped_exactly(k))
             .map(|k| k.key))
+    }
+
+    pub async fn create_key(&self, name: &str, actions: &[&str], indexes: &[&str]) -> Result<String> {
+        #[derive(Deserialize)]
+        struct Created {
+            key: String,
+        }
+        let created: Created = self
+            .send_json(self.request(Method::POST, "/keys").json(&json!({
+                "name": name,
+                "description": "Search and chat over the indexes the assistant is offered",
+                "actions": actions,
+                "indexes": indexes,
+                "expiresAt": null
+            })))
+            .await?;
+        Ok(created.key)
     }
 }

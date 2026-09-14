@@ -147,13 +147,12 @@ pub async fn apply_chat(meili: &MeiliClient, config: &ChatConfig<'_>) -> Result<
         "apiKey": api_key,
         "prompts": {
             "system": SYSTEM_PROMPT,
-            "searchDescription": "Recherche dans le droit français : d'abord les articles des codes en vigueur (index 'legi'), puis la jurisprudence de la Cour de cassation. Pour toute question de droit, commence par chercher l'article applicable, puis les décisions qui l'interprètent.",
-            "searchQParam": "Mots-clés juridiques en français à rechercher (notions, articles de code, numéro de pourvoi, ECLI). Reste concis : 2 à 8 mots.",
-            "searchFilterParam": "Filtre Meilisearch optionnel. Attributs : jurisdiction, chamber, formation, publication, type, solution, themes, year (entier), decision_timestamp (unix). Exemple : chamber = 'Chambre sociale' AND year >= 2022",
+            "searchDescription": "Recherche dans les articles en vigueur des codes français (Légifrance). Pour toute question de droit, cherche l'article qui fonde la réponse et cite-le.",
+            "searchQParam": "Mots-clés juridiques en français à rechercher (notions, numéro d'article, intitulé de code). Reste concis : 2 à 8 mots.",
+            "searchFilterParam": "Filtre Meilisearch optionnel. Attributs : code, code_id, number, reference_key, section, year (entier), date_debut_timestamp (unix). Exemple : code = 'Code du travail'",
             "searchIndexUidParam": format!(
-                "Index à interroger, dans cet ordre : d'abord '{legi_index}' (articles des codes en vigueur) pour \
-                 établir la règle applicable, puis '{index}' (décisions de la Cour de cassation) pour la \
-                 jurisprudence qui l'interprète."
+                "Index à interroger : '{legi_index}', les articles en vigueur des codes français. \
+                 C'est le seul index disponible."
             )
         }
     });
@@ -167,8 +166,12 @@ pub async fn apply_chat(meili: &MeiliClient, config: &ChatConfig<'_>) -> Result<
     if let Some(embedder) = embedder {
         search_parameters["hybrid"] = json!({ "embedder": embedder, "semanticRatio": 0.5 });
     }
+    // Withdrawn from the chat: no wording of the prompts kept the model from reaching
+    // for the decisions first, and an empty `description` is the one control that
+    // reliably removes an index from the chat. The index itself is untouched — the
+    // search UI still browses it, and restoring a description brings it back.
     let index_chat = json!({
-        "description": "Décisions de la Cour de cassation (Judilibre) : arrêts, avis et QPC, avec titrage, sommaire, textes appliqués et motivations. À interroger APRÈS l'index des codes, pour la jurisprudence qui interprète l'article applicable.",
+        "description": "",
         "documentTemplate": DOCUMENT_TEMPLATE,
         "documentTemplateMaxBytes": 7000,
         "searchParameters": search_parameters.clone()
@@ -190,7 +193,7 @@ pub async fn apply_chat(meili: &MeiliClient, config: &ChatConfig<'_>) -> Result<
     meili.update_index_chat_settings(chunk_index, &chunk_chat).await?;
 
     let legi_chat = json!({
-        "description": "Articles en vigueur des codes français (Légifrance/LEGI) : le texte de la règle elle-même, avec son code et sa place dans celui-ci. COMMENCER PAR CET INDEX pour toute question de droit : il donne la règle applicable, que la jurisprudence viendra ensuite préciser. À interroger pour citer un article ou vérifier sa rédaction actuelle.",
+        "description": "Articles en vigueur des codes français (Légifrance/LEGI) : le texte de la règle elle-même, avec son code et sa place dans celui-ci. Seule source de l'assistant : toute réponse doit s'appuyer sur les articles qu'il renvoie.",
         "documentTemplate": ARTICLE_DOCUMENT_TEMPLATE,
         "documentTemplateMaxBytes": 4000,
         "searchParameters": { "limit": 6 }
@@ -198,38 +201,47 @@ pub async fn apply_chat(meili: &MeiliClient, config: &ChatConfig<'_>) -> Result<
     info!(legi_index, "configuring LEGI index chat settings");
     meili.update_index_chat_settings(legi_index, &legi_chat).await?;
 
-    match meili.find_key_with_action("chatCompletions").await? {
+    // Scoped to exactly the indexes the assistant is offered. This, not the per-index
+    // `description`, is what actually confines the assistant to one corpus: an empty
+    // description does not stop the model passing an `index_uid` of its own, and
+    // Meilisearch will run that search if the key allows it.
+    let chat_indexes = [legi_index];
+    match meili.find_chat_key(&chat_indexes).await? {
         Some(key) => info!(
             "chat API key (set MEILI_CHAT_KEY in .env for the web app): {}",
             key
         ),
-        None => info!("no chat API key found yet; Meilisearch creates one shortly after enabling the feature"),
+        None => {
+            info!(indexes = ?chat_indexes, "no chat key covers the assistant's indexes; creating one");
+            let key = meili
+                .create_key("judilibre-chat", &["search", "chatCompletions"], &chat_indexes)
+                .await?;
+            info!(
+                "chat API key created — set MEILI_CHAT_KEY in .env for the web app: {}",
+                key
+            );
+        }
     }
     Ok(())
 }
 
-const SYSTEM_PROMPT: &str = "Tu es un assistant juridique adossé à deux sources : les articles des codes \
-français en vigueur (Légifrance) et la jurisprudence de la Cour de cassation (Judilibre). \
-MÉTHODE, à suivre dans cet ordre : commence toujours par chercher dans l'index des codes l'article qui \
-fonde la réponse et cite-le ; cherche ensuite la jurisprudence qui l'interprète. N'interroge pas la \
-jurisprudence en premier. \
+const SYSTEM_PROMPT: &str = "Tu es un assistant juridique adossé à une seule source : les articles \
+des codes français en vigueur (Légifrance). \
 Réponds en français, de façon précise et structurée. \
-Appuie chaque affirmation sur les décisions retournées par la recherche : cite la juridiction, la chambre, \
-la date et le numéro de pourvoi (par exemple « Cass. soc., 12 janvier 2024, n° 22-10.123 »). \
-Si les décisions trouvées ne permettent pas de répondre, dis-le clairement plutôt que d'inventer. \
+Appuie chaque affirmation sur les articles retournés par la recherche : cite le code et le numéro \
+d'article (par exemple « article L. 1152-1 du code du travail »), et reprends la formulation du texte \
+plutôt que de la paraphraser librement. \
+Si les articles trouvés ne permettent pas de répondre, dis-le clairement plutôt que d'inventer, et \
+n'invente jamais un numéro d'article. \
+Tu n'as pas accès à la jurisprudence : si la question appelle une interprétation que le texte ne \
+tranche pas, signale-le au lieu de citer des décisions que tu n'as pas consultées. \
 Ne donne pas de conseil juridique personnalisé : rappelle que la réponse est informative. \
-Lorsque la question porte sur une période ou une chambre précise, utilise le paramètre de filtre. \
-Procède dans cet ordre : d'abord le texte applicable dans les codes, ensuite la jurisprudence qui \
-l'interprète. Commence donc par chercher les articles pertinents, cite-les, puis appuie-toi sur les \
-décisions pour montrer comment ils sont appliqués. \
-Ne confonds pas les deux sources : le texte d'un article vient de l'index des codes, la solution \
-retenue vient des décisions. Les passages issus des documents associés (communiqués, rapports, \
-avis) doivent être présentés comme tels et non comme le texte de l'arrêt. \
-Un article peut avoir été renuméroté ou réécrit : si une décision vise un article « dans sa \
-rédaction antérieure », signale que le texte en vigueur peut différer de celui qu'elle applique. \
+Lorsque la question vise un code précis, utilise le paramètre de filtre. \
+Les articles renvoyés sont ceux en vigueur aujourd'hui : si la question porte sur une situation \
+passée, signale que la rédaction applicable à l'époque pouvait différer. \
 Sois économe en recherches : trois à cinq requêtes bien choisies suffisent presque toujours. \
-Ne relance pas une recherche pour reformuler la même idée, et réponds dès que les décisions \
-trouvées permettent de le faire.";
+Ne relance pas une recherche pour reformuler la même idée, et réponds dès que les articles \
+trouvés permettent de le faire.";
 
 /// Text embedded per decision: citation line, titrage, sommaire and the start of the
 /// motivations. voyage-law-2 handles 16K tokens, so 4 000 bytes is comfortable.

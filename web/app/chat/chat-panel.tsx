@@ -3,13 +3,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { AlertCircle, ArrowUp, ChevronDown, ExternalLink, FileText, Scale, Search, Square } from "lucide-react";
+import { AlertCircle, ArrowUp, ChevronDown, ExternalLink, FileText, Library, Scale, Search, Square } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
 import { consumeChatStream } from "@/lib/chat-stream";
 import type { AssistantTurn, ChatMessage, SearchStep, SourceDoc, Turn } from "@/lib/chat-types";
@@ -17,10 +25,10 @@ import { citation } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const SUGGESTIONS = [
-  "Quelles sont les conditions de la nullité du licenciement en cas de harcèlement moral ?",
-  "Comment la Cour de cassation apprécie-t-elle le préjudice d'anxiété lié à l'amiante ?",
-  "Un bailleur peut-il refuser le renouvellement d'un bail commercial sans indemnité d'éviction ?",
-  "Quelle est la portée de l'obligation de sécurité de l'employeur en 2024 ?",
+  "Que dit le code du travail sur le harcèlement moral ?",
+  "Quel est le délai de préavis pour donner congé d'un bail d'habitation ?",
+  "Quelles obligations de sécurité le code du travail impose-t-il à l'employeur ?",
+  "Que prévoit le code civil en matière de responsabilité du fait des choses ?",
 ];
 
 let turnSeq = 0;
@@ -122,13 +130,13 @@ export function ChatPanel() {
           {turns.length === 0 ? (
             <div className="flex flex-1 flex-col justify-center gap-6 py-10">
               <div className="flex flex-col gap-2">
-                <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">Assistant jurisprudence</p>
-                <h1 className="font-heading text-3xl leading-tight font-medium tracking-tight sm:text-4xl">
-                  Posez votre question, <span className="italic">la Cour répond par ses arrêts</span>.
+                <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">Assistant codes</p>
+                <h1 className="font-heading text-2xl leading-tight font-medium tracking-tight sm:text-4xl">
+                  Posez votre question, <span className="italic">le code répond article par article</span>.
                 </h1>
                 <p className="text-muted-foreground max-w-2xl text-sm">
-                  L&apos;assistant interroge Meilisearch en direct, puis rédige une réponse appuyée sur les décisions
-                  trouvées. Chaque source est consultable. Réponse informative, pas un avis juridique.
+                  L&apos;assistant interroge Meilisearch en direct, puis rédige une réponse appuyée sur les articles
+                  des codes en vigueur. Chaque source est consultable. Réponse informative, pas un avis juridique.
                 </p>
               </div>
               <ul className="grid gap-2 sm:grid-cols-2">
@@ -137,7 +145,7 @@ export function ChatPanel() {
                     <button
                       type="button"
                       onClick={() => send(s)}
-                      className="bg-card hover:ring-foreground/25 focus-visible:ring-ring/50 w-full rounded-xl p-4 text-left text-sm leading-relaxed ring-1 ring-foreground/10 transition-shadow outline-none hover:shadow-sm focus-visible:ring-3"
+                      className="bg-card hover:ring-foreground/25 focus-visible:ring-ring/50 w-full rounded-xl p-3.5 text-left text-sm leading-relaxed ring-1 ring-foreground/10 transition-shadow outline-none hover:shadow-sm focus-visible:ring-3 sm:p-4"
                     >
                       {s}
                     </button>
@@ -177,8 +185,36 @@ export function ChatPanel() {
           <div ref={bottomRef} />
         </div>
 
+        {/* The sidebar of source cards is desktop-only; on a phone the same cards
+            open in a sheet, so the excerpts and attached PDFs stay reachable. */}
+        {sources.length > 0 ? (
+          <Sheet>
+            <SheetTrigger
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "mb-2 h-9 shrink-0 gap-1.5 self-start lg:hidden",
+              )}
+            >
+              <Library data-icon="inline-start" />
+              Sources citées
+              <span className="font-mono text-xs tabular-nums">({sources.length})</span>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="max-h-[85svh] rounded-t-2xl lg:hidden">
+              <SheetHeader className="pr-12">
+                <SheetTitle>Sources citées</SheetTitle>
+                <SheetDescription>
+                  Les articles retrouvés par Meilisearch pour la dernière réponse.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                <SourcesList sources={sources} />
+              </div>
+            </SheetContent>
+          </Sheet>
+        ) : null}
+
         <form
-          className="shrink-0 pb-6"
+          className="shrink-0 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
           onSubmit={(e) => {
             e.preventDefault();
             void send(input);
@@ -201,11 +237,11 @@ export function ChatPanel() {
             />
             <InputGroupAddon align="inline-end">
               {busy ? (
-                <InputGroupButton size="icon-sm" variant="outline" aria-label="Interrompre" onClick={stop}>
+                <InputGroupButton size="icon-sm" variant="outline" className="max-sm:size-9" aria-label="Interrompre" onClick={stop}>
                   <Square />
                 </InputGroupButton>
               ) : (
-                <InputGroupButton size="icon-sm" variant="default" type="submit" aria-label="Envoyer" disabled={!input.trim()}>
+                <InputGroupButton size="icon-sm" variant="default" className="max-sm:size-9" type="submit" aria-label="Envoyer" disabled={!input.trim()}>
                   <ArrowUp />
                 </InputGroupButton>
               )}
@@ -218,20 +254,30 @@ export function ChatPanel() {
         <h2 className="shrink-0 py-6 text-xs font-semibold tracking-wider uppercase">Sources citées</h2>
         {/* Scrolls independently of the conversation: a long answer never buries its sources. */}
         <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-          {sources.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Les décisions retrouvées par Meilisearch pour la dernière réponse apparaîtront ici.</p>
-          ) : (
-            <ol className="flex flex-col gap-2">
-              {sources.map((doc, i) => (
-                <li key={doc.id}>
-                  <SourceCard doc={doc} index={i + 1} />
-                </li>
-              ))}
-            </ol>
-          )}
+          <SourcesList sources={sources} />
         </div>
       </aside>
     </div>
+  );
+}
+
+/** The cited decisions, rendered identically by the desktop sidebar and the mobile sheet. */
+function SourcesList({ sources }: { sources: SourceDoc[] }) {
+  if (sources.length === 0) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        Les articles retrouvés par Meilisearch pour la dernière réponse apparaîtront ici.
+      </p>
+    );
+  }
+  return (
+    <ol className="flex flex-col gap-2">
+      {sources.map((doc, i) => (
+        <li key={doc.id}>
+          <SourceCard doc={doc} index={i + 1} />
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -254,11 +300,11 @@ function AssistantMessage({ turn }: { turn: AssistantTurn }) {
           >
             {current?.query ? (
               <>
-                <span className="shrink-0">Lecture des décisions</span>
+                <span className="shrink-0">Lecture des articles</span>
                 <span className="min-w-0 truncate italic">« {current.query} »</span>
               </>
             ) : (
-              <span>Recherche dans les codes et la jurisprudence…</span>
+              <span>Recherche dans les codes…</span>
             )}
           </p>
         ) : turn.steps.length > 0 ? (
@@ -276,10 +322,14 @@ function AssistantMessage({ turn }: { turn: AssistantTurn }) {
         {sources.length > 0 && !turn.pending ? (
           <ol className="flex flex-wrap gap-1.5 lg:hidden" aria-label="Sources">
             {sources.map((doc, i) => (
-              <li key={doc.id}>
-                <Link href={`/decision/${doc.decisionId}`} className="hover:underline">
-                  <Badge variant="secondary" className="font-mono">
-                    [{i + 1}] {citation(doc)}
+              // A citation is wider than a phone, and a Badge is `shrink-0 overflow-hidden`,
+              // so without this it is hard-clipped mid-word with no ellipsis.
+              <li key={doc.id} className="min-w-0 max-w-full">
+                <Link href={sourceHref(doc)} className="block max-w-full hover:underline">
+                  <Badge variant="secondary" className="max-w-full min-w-0 shrink font-mono">
+                    <span className="truncate">
+                      [{i + 1}] {sourceLabel(doc)}
+                    </span>
                   </Badge>
                 </Link>
               </li>
@@ -295,7 +345,9 @@ function AssistantMessage({ turn }: { turn: AssistantTurn }) {
 function SearchTrace({ steps, sourceCount }: { steps: SearchStep[]; sourceCount: number }) {
   return (
     <Collapsible>
-      <CollapsibleTrigger className={cn(buttonVariants({ variant: "ghost", size: "xs" }), "text-muted-foreground -ml-2")}>
+      <CollapsibleTrigger
+        className={cn(buttonVariants({ variant: "ghost", size: "xs" }), "text-muted-foreground -ml-2 max-lg:h-9 max-lg:px-2.5")}
+      >
         <Search data-icon="inline-start" />
         {steps.length} recherche{steps.length > 1 ? "s" : ""} · {sourceCount} source
         {sourceCount > 1 ? "s" : ""}
@@ -307,7 +359,7 @@ function SearchTrace({ steps, sourceCount }: { steps: SearchStep[]; sourceCount:
             <li key={s.callId} className="text-muted-foreground flex min-w-0 items-center gap-2 text-xs">
               <span className="min-w-0 truncate italic">« {s.query || "…"} »</span>
               <span className="shrink-0 font-mono text-[11px]">
-                {s.indexUid.endsWith("_chunk") ? "passages" : "décisions"}
+                {s.indexUid.endsWith("_chunk") ? "passages" : s.documents.some(isArticle) ? "articles" : "décisions"}
               </span>
               <span className="shrink-0 font-mono text-[11px] tabular-nums">{s.documents.length}</span>
             </li>
@@ -318,24 +370,43 @@ function SearchTrace({ steps, sourceCount }: { steps: SearchStep[]; sourceCount:
   );
 }
 
+/** A source carrying a code is a code article; anything else is a decision or a passage. */
+function isArticle(doc: SourceDoc): boolean {
+  return Boolean(doc.code);
+}
+
+function sourceHref(doc: SourceDoc): string {
+  return isArticle(doc) ? `/article/${doc.id}` : `/decision/${doc.decisionId}`;
+}
+
+function sourceLabel(doc: SourceDoc): string {
+  if (!isArticle(doc)) return citation(doc);
+  return doc.reference || `Article ${doc.number} · ${doc.code}`;
+}
+
 function SourceCard({ doc, index }: { doc: SourceDoc; index: number }) {
-  const title = doc.titles?.[0] ?? "";
-  const isAttachment = doc.source === "attachment";
-  const excerpt = doc.content || doc.summary;
+  const article = isArticle(doc);
+  const title = article ? doc.section : (doc.titles?.[0] ?? "");
+  const isAttachment = !article && doc.source === "attachment";
+  const excerpt = article ? doc.text : doc.content || doc.summary;
   // A passage links its own PDF; a whole decision links every attached document.
-  const files = isAttachment && doc.attachmentUrl
-    ? [{ name: doc.attachmentName, type: doc.attachmentType, url: doc.attachmentUrl }]
-    : doc.files;
+  // An article has neither.
+  const files = article
+    ? []
+    : isAttachment && doc.attachmentUrl
+      ? [{ name: doc.attachmentName, type: doc.attachmentType, url: doc.attachmentUrl }]
+      : doc.files;
 
   return (
     <div className="bg-card flex flex-col gap-1 rounded-lg p-3 ring-1 ring-foreground/10 transition-shadow hover:shadow-sm">
       <Link
-        href={`/decision/${doc.decisionId}`}
+        href={sourceHref(doc)}
         className="focus-visible:ring-ring/50 flex flex-col gap-1 rounded outline-none focus-visible:ring-3"
       >
-        <span className="text-muted-foreground flex items-center gap-2 font-mono text-[11px] tabular-nums">
+        {/* An article reference is longer than a decision citation: let it wrap. */}
+        <span className="text-muted-foreground flex flex-wrap items-center gap-x-2 font-mono text-[11px] tabular-nums">
           <span className="text-seal font-medium">[{index}]</span>
-          {citation(doc)}
+          <span className="min-w-0 break-words">{sourceLabel(doc)}</span>
         </span>
         {title ? <span className="font-heading line-clamp-2 text-sm leading-snug">{title}</span> : null}
         {excerpt ? <span className="text-muted-foreground line-clamp-3 text-xs leading-relaxed">{excerpt}</span> : null}

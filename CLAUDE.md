@@ -8,7 +8,7 @@ Monorepo with three parts sharing one root `.env` (see `.env.example`):
 
 ## Three indexes
 
-- `judilibre`: one document per decision (Judilibre API). Fields in `indexer/src/transform.rs`, mirrored in `web/lib/types.ts`.
+- `judilibre`: one document per decision (Judilibre API). Fields in `indexer/src/transform.rs`, mirrored in `web/lib/types.ts`. Browsable in the search UI, but withdrawn from the chat (empty `description`).
 - `judilibre_chunk`: ~2 000-character passages of each decision and of each attached PDF, with `distinctAttribute: decision_id`. Fields in `indexer/src/chunk.rs`. Built but not surfaced: it is neither browsable in the UI nor offered to the assistant (its chat `description` is empty, which withdraws an index from the chat).
 - `legi`: in-force articles of the French codes, parsed from the LEGI bulk archive (DILA). Fields in `indexer/src/legi.rs`.
 
@@ -31,13 +31,34 @@ What `refs.rs` has to defend against, all seen in real visas:
 
 The join is version-blind by construction: a key is a code plus a number, so a decision applying the pre-2016 article 1134 links to today's article 1134, which is a different rule. The article page states this rather than implying otherwise. Note that a *recent* decision can apply an old wording, so comparing dates does not detect it.
 
-## The assistant's choice of index cannot be dictated
+## What actually confines the assistant to one corpus is the key
 
-`searchIndexUidParam`, `searchDescription`, the system prompt and the per-index
-descriptions all state that the codes come first. gpt-5.5 still searches
-`judilibre` first. Emptying an index's chat `description` does reliably withdraw
-it, so the only hard control available is which indexes are offered at all.
+Not the prompts, and not the per-index chat `description`. Both were set to put
+the codes first and the model still searched `judilibre`; emptying an index's
+`description` does **not** withdraw it either — the model passes an `index_uid`
+of its own and Meilisearch runs the search if the key allows it. Captured from
+the raw SSE, with both decision indexes on `"description": ""`:
 
+    "index_uid":"judilibre"        ×3
+    "index_uid":"judilibre_chunk"  ×1
+
+The real control is the API key's index scope. `MEILI_CHAT_KEY` had
+`indexes: ["judilibre", "judilibre_chunk"]` and no access to `legi` at all, so
+the assistant could never reach the codes whatever the prompts said — which is
+what the older note here mistook for the model ignoring them. `setup` now looks
+for a chat key covering the indexes it offers (`find_chat_key`) and creates a
+correctly scoped one when none does, instead of taking the first key that merely
+carries the `chatCompletions` action.
+
+Changing the chat's corpus therefore means changing that key, and `.env` with it
+— re-running `setup` alone will not do it.
+
+The consequences reach the web app, because a chat source is no longer
+decision-shaped. `SourceDoc` carries the article fields too, and `isArticle` in
+`chat-panel.tsx` branches on `code` to pick the link (`/article/…` against
+`/decision/…`) and the label. The chat's French copy names the codes, not the
+case law. Re-offering `judilibre` means widening the key again — the UI already
+handles both shapes.
 ## Do not push partial documents to an index with an embedder
 
 `{id, visa_refs}` alone is rejected with `invalid_document_fields`: Meilisearch renders the embedder's `documentTemplate` against the fields supplied, and the template needs `doc.jurisdiction`. Back-filling a derived field therefore means re-pushing whole documents — `load --from <dumps> --no-chunks`, which `load` recomputes the field for. Re-pushing identical text does not re-embed.
