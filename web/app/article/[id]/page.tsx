@@ -69,36 +69,71 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
-      <Button variant="ghost" size="sm" className="-ml-2 mb-4" nativeButton={false} render={<Link href="/" />}>
+      <Button variant="ghost" size="sm" className="-ml-2 mb-4 max-sm:h-10 max-sm:px-3" nativeButton={false} render={<Link href="/" />}>
         <ArrowLeft data-icon="inline-start" />
         Retour à la recherche
       </Button>
 
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <article className="flex min-w-0 flex-col gap-6">
-          <header className="flex flex-col gap-3">
-            <p className="text-muted-foreground flex items-center gap-1.5 font-mono text-xs">
-              <Landmark className="size-3.5" aria-hidden />
-              {article.code}
-            </p>
-            <h1 className="font-heading text-3xl leading-tight font-medium tracking-tight sm:text-4xl">
-              Article {article.number}
-            </h1>
-            {article.hierarchy.length > 0 ? (
-              <nav aria-label="Emplacement dans le code" className="flex flex-wrap items-center gap-1 text-sm">
-                {article.hierarchy.map((level, i) => (
-                  <span key={level} className="text-muted-foreground flex items-center gap-1">
-                    {i > 0 ? <ChevronRight className="size-3.5 shrink-0" aria-hidden /> : null}
-                    {level}
-                  </span>
-                ))}
-              </nav>
-            ) : null}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Badge>Article en vigueur</Badge>
-              {article.date_debut ? <Badge variant="outline">depuis le {formatDate(article.date_debut)}</Badge> : null}
-            </div>
-          </header>
+      {/* On a phone the aside comes between the title and the text: its dates, applied
+          texts and links are what you want first, not after pages of legal prose.
+          Explicit grid placement keeps the desktop layout exactly as it was. */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-x-10 lg:gap-y-6">
+        <header className="flex flex-col gap-3 lg:col-start-1 lg:row-start-1">
+          <p className="text-muted-foreground flex items-center gap-1.5 font-mono text-xs">
+            <Landmark className="size-3.5" aria-hidden />
+            {article.code}
+          </p>
+          <h1 className="font-heading text-2xl leading-tight font-medium tracking-tight sm:text-4xl">
+            Article {article.number}
+          </h1>
+          {article.hierarchy.length > 0 ? (
+            <nav aria-label="Emplacement dans le code" className="flex flex-wrap items-center gap-1 text-sm">
+              {article.hierarchy.map((level, i) => (
+                <span key={level} className="text-muted-foreground flex items-center gap-1">
+                  {i > 0 ? <ChevronRight className="size-3.5 shrink-0" aria-hidden /> : null}
+                  {level}
+                </span>
+              ))}
+            </nav>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge>Article en vigueur</Badge>
+            {article.date_debut ? <Badge variant="outline">depuis le {formatDate(article.date_debut)}</Badge> : null}
+          </div>
+        </header>
+
+        <aside className="flex flex-col gap-6 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:sticky lg:top-20 lg:self-start">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+            {(
+              [
+                ["Code", article.code],
+                ["Article", article.number],
+                ["Subdivision", article.section],
+                ["En vigueur", article.date_debut ? formatDate(article.date_debut) : ""],
+                ["Identifiant", article.id],
+              ] as Array<[string, string]>
+            )
+              .filter(([, value]) => Boolean(value))
+              .map(([label, value]) => (
+                <div key={label} className="contents">
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd className="min-w-0 break-words font-medium">{value}</dd>
+                </div>
+              ))}
+          </dl>
+
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<a href={article.url} target="_blank" rel="noreferrer" />}
+          >
+            <ExternalLink data-icon="inline-start" />
+            Voir sur Légifrance
+          </Button>
+        </aside>
+
+        <article className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-2">
 
           <section aria-labelledby="texte" className="flex flex-col gap-3">
             <h2 id="texte" className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
@@ -159,37 +194,6 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
             )}
           </section>
         </article>
-
-        <aside className="flex flex-col gap-6 lg:sticky lg:top-20 lg:self-start">
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-            {(
-              [
-                ["Code", article.code],
-                ["Article", article.number],
-                ["Subdivision", article.section],
-                ["En vigueur", article.date_debut ? formatDate(article.date_debut) : ""],
-                ["Identifiant", article.id],
-              ] as Array<[string, string]>
-            )
-              .filter(([, value]) => Boolean(value))
-              .map(([label, value]) => (
-                <div key={label} className="contents">
-                  <dt className="text-muted-foreground">{label}</dt>
-                  <dd className="min-w-0 break-words font-medium">{value}</dd>
-                </div>
-              ))}
-          </dl>
-
-          <Button
-            variant="outline"
-            size="sm"
-            nativeButton={false}
-            render={<a href={article.url} target="_blank" rel="noreferrer" />}
-          >
-            <ExternalLink data-icon="inline-start" />
-            Voir sur Légifrance
-          </Button>
-        </aside>
       </div>
     </div>
   );
