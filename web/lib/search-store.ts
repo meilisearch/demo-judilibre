@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { randomSuggestion } from "@/lib/suggestions";
 import type { FacetAttribute } from "@/lib/types";
 
 export type SortOption = "relevance" | "date_desc" | "date_asc";
@@ -42,12 +43,20 @@ export type Filters = Partial<Record<FacetAttribute, string[]>>;
 
 interface SearchState extends SearchSettings {
   query: string;
+  /**
+   * The query as last filled in from `SUGGESTIONS`, until the user types. While the
+   * two match, switching tabs swaps in a suggestion for the new corpus instead of
+   * running one tab's example against the other.
+   */
+  suggestion: string | null;
   filters: Filters;
   /** Hybrid by default; falls back to keywords where the index has no embedder. */
   mode: SearchMode;
   scope: SearchScope;
   page: number;
   setQuery: (q: string) => void;
+  /** Fill an empty search bar with a random suggestion for the current tab. */
+  suggestIfEmpty: () => void;
   setMode: (m: SearchMode) => void;
   setScope: (s: SearchScope) => void;
   toggleFilter: (attr: FacetAttribute, value: string) => void;
@@ -62,15 +71,27 @@ interface SearchState extends SearchSettings {
 
 export const useSearchStore = create<SearchState>((set) => ({
   query: "",
+  suggestion: null,
   filters: {},
   ...DEFAULT_SETTINGS,
   mode: "hybrid",
   // Codes is the first tab: the law before its application.
   scope: "articles",
   page: 1,
-  setQuery: (query) => set({ query, page: 1 }),
+  setQuery: (query) => set({ query, suggestion: null, page: 1 }),
+  suggestIfEmpty: () =>
+    set((state) => {
+      if (state.query) return {};
+      const suggestion = randomSuggestion(state.scope);
+      return { query: suggestion, suggestion, page: 1 };
+    }),
   setMode: (mode) => set({ mode, page: 1 }),
-  setScope: (scope) => set({ scope, page: 1 }),
+  setScope: (scope) =>
+    set((state) => {
+      if (state.suggestion === null || state.query !== state.suggestion) return { scope, page: 1 };
+      const suggestion = randomSuggestion(scope);
+      return { scope, query: suggestion, suggestion, page: 1 };
+    }),
   toggleFilter: (attr, value) =>
     set((state) => {
       const current = state.filters[attr] ?? [];

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -78,6 +79,12 @@ const ARTICLE_FIELDS = [
 export function SearchPage() {
   const { query, filters, sort, mode, scope, page, semanticRatio, matchingStrategy, rankingScoreThreshold } =
     useSearchStore();
+  const suggestIfEmpty = useSearchStore((s) => s.suggestIfEmpty);
+
+  // After mount, not in the store's initial state: a random query rendered on the
+  // server would not match the one picked on the client. The store outlives the page,
+  // so coming back from a decision keeps whatever was searched.
+  useEffect(() => suggestIfEmpty(), [suggestIfEmpty]);
 
   const search = useQuery({
     queryKey: [
