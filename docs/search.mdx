@@ -16,7 +16,20 @@ The switch above the filters chooses which index is queried:
 
 The passage index `judilibre_chunk` is still built, but it is no longer browsed: it proved the least useful of the three to read through, and offering it alongside the others muddied the assistant's choice of corpus.
 
-Facets follow the corpus: chamber, solution and publication for case law; code and subdivision for articles. The **IA** button on the right of the search field turns on hybrid search (`semanticRatio: 0.6`) using the Voyage embedder; it only appears when an embedder is configured on the index being queried. Sorting by date is hidden in the Codes corpus, where it carries no meaning.
+Facets follow the corpus: chamber, solution and publication for case law; code and subdivision for articles. The **IA** button inside the search field turns on hybrid search using the Voyage embedder; it only appears when an embedder is configured on the index being queried.
+
+## Settings panel
+
+The gear beside the search field opens a sheet holding the request parameters a visitor would otherwise never reach. Every one of them starts at the value Meilisearch would behave best with, and the gear fills in to show how many were moved:
+
+| Setting | Default | Sent as |
+|---|---|---|
+| Tri | Pertinence — no sort at all | `sort` (decisions only; the `legi` index carries no date to sort on) |
+| Équilibre hybride | `0.5` | `hybrid.semanticRatio`, only while the IA toggle is on |
+| Correspondance | Fréquence | `matchingStrategy` |
+| Seuil de score | Aucun, i.e. `0` | `rankingScoreThreshold`, omitted entirely at 0 since 0 excludes nothing |
+
+Sorting lives here rather than in the results toolbar: it is one knob among four, and duplicating it in two places only invites the two to disagree.
 
 ## Cross-links
 
@@ -31,9 +44,10 @@ Each keystroke runs one `search` call with:
 - `attributesToCrop: ["text"]` so a snippet from the full text appears when the match is only in the body
 - `filter`: one clause per facet (`OR` inside a facet, `AND` across facets)
 - `sort`: relevance, `decision_timestamp:desc` or `decision_timestamp:asc`
+- `matchingStrategy` and, above 0, `rankingScoreThreshold` — both from the settings panel
 - `hitsPerPage: 10` with `page` for exhaustive pagination
 
-State (query, filters, sort, scope, mode, page) lives in a Zustand store; fetching goes through TanStack Query with `keepPreviousData` so results never flash.
+State (query, filters, scope, mode, page and the four settings) lives in a Zustand store; fetching goes through TanStack Query with `keepPreviousData` so results never flash. Every setting is part of the query key, so moving one refetches.
 
 Passage hits render as quotations with the decision's citation, the passage position (`passage 7 / 23`) and a badge saying whether the text comes from the decision itself or from an attached document.
 

@@ -24,15 +24,39 @@ export function looksNaturalLanguage(query: string): boolean {
   return q.split(/\s+/).length > NATURAL_LANGUAGE_WORDS;
 }
 
-/** Weight of the semantic side in hybrid search (0 = keyword only, 1 = vectors only). */
-export const HYBRID_SEMANTIC_RATIO = 0.6;
+/**
+ * How Meilisearch narrows a query whose every word cannot be matched: `frequency`
+ * drops the most common word first, `last` drops the last one, `all` drops nothing
+ * and returns only documents holding every word.
+ */
+export type MatchingStrategy = "frequency" | "last" | "all";
+
+/** What the settings panel exposes, and nothing else — the gear badge diffs this shape. */
+export interface SearchSettings {
+  sort: SortOption;
+  /** Weight of the semantic side in hybrid search (0 = keyword only, 1 = vectors only). */
+  semanticRatio: number;
+  matchingStrategy: MatchingStrategy;
+  /**
+   * Minimum ranking score a hit must reach to be returned. 0 excludes nothing,
+   * which is what "no threshold" means to Meilisearch — so 0 *is* the off state.
+   */
+  rankingScoreThreshold: number;
+}
+
+/** Defaults of the settings panel; also what "reset" restores. */
+export const DEFAULT_SETTINGS: SearchSettings = {
+  sort: "relevance",
+  semanticRatio: 0.5,
+  matchingStrategy: "frequency",
+  rankingScoreThreshold: 0,
+};
 
 export type Filters = Partial<Record<FacetAttribute, string[]>>;
 
-interface SearchState {
+interface SearchState extends SearchSettings {
   query: string;
   filters: Filters;
-  sort: SortOption;
   mode: SearchMode;
   /** The user set the mode by hand, so typing no longer changes it. */
   modePinned: boolean;
@@ -44,13 +68,17 @@ interface SearchState {
   toggleFilter: (attr: FacetAttribute, value: string) => void;
   clearFilters: () => void;
   setSort: (s: SortOption) => void;
+  setSemanticRatio: (r: number) => void;
+  setMatchingStrategy: (m: MatchingStrategy) => void;
+  setRankingScoreThreshold: (t: number) => void;
+  resetSettings: () => void;
   setPage: (p: number) => void;
 }
 
 export const useSearchStore = create<SearchState>((set) => ({
   query: "",
   filters: {},
-  sort: "relevance",
+  ...DEFAULT_SETTINGS,
   mode: "keyword",
   modePinned: false,
   // Codes is the first tab: the law before its application.
@@ -74,6 +102,10 @@ export const useSearchStore = create<SearchState>((set) => ({
     }),
   clearFilters: () => set({ filters: {}, page: 1 }),
   setSort: (sort) => set({ sort, page: 1 }),
+  setSemanticRatio: (semanticRatio) => set({ semanticRatio, page: 1 }),
+  setMatchingStrategy: (matchingStrategy) => set({ matchingStrategy, page: 1 }),
+  setRankingScoreThreshold: (rankingScoreThreshold) => set({ rankingScoreThreshold, page: 1 }),
+  resetSettings: () => set({ ...DEFAULT_SETTINGS, page: 1 }),
   setPage: (page) => set({ page }),
 }));
 
@@ -96,4 +128,10 @@ export function sortParam(sort: SortOption): string[] | undefined {
   if (sort === "date_desc") return ["decision_timestamp:desc"];
   if (sort === "date_asc") return ["decision_timestamp:asc"];
   return undefined;
+}
+
+/** How many settings the user moved away from their default — the count on the gear. */
+export function countChangedSettings(settings: SearchSettings): number {
+  return (Object.keys(DEFAULT_SETTINGS) as (keyof SearchSettings)[]).filter((k) => settings[k] !== DEFAULT_SETTINGS[k])
+    .length;
 }

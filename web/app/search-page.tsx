@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getMeili } from "@/lib/meili-client";
-import { HYBRID_SEMANTIC_RATIO, buildFilter, sortParam, useSearchStore } from "@/lib/search-store";
+import { buildFilter, sortParam, useSearchStore } from "@/lib/search-store";
 import {
   FACET_ATTRIBUTES,
   HL_POST,
@@ -76,10 +76,22 @@ const ARTICLE_FIELDS = [
 ];
 
 export function SearchPage() {
-  const { query, filters, sort, mode, scope, page } = useSearchStore();
+  const { query, filters, sort, mode, scope, page, semanticRatio, matchingStrategy, rankingScoreThreshold } =
+    useSearchStore();
 
   const search = useQuery({
-    queryKey: ["search", query, filters, sort, mode, scope, page],
+    queryKey: [
+      "search",
+      query,
+      filters,
+      sort,
+      mode,
+      scope,
+      page,
+      semanticRatio,
+      matchingStrategy,
+      rankingScoreThreshold,
+    ],
     placeholderData: keepPreviousData,
     queryFn: async (): Promise<SearchResult> => {
       const { client, config } = await getMeili();
@@ -87,8 +99,7 @@ export function SearchPage() {
       const index = kind === "articles" ? (config.legiIndex as string) : config.index;
       const embedder = kind === "articles" ? config.legiEmbedder : config.embedder;
       const facetAttributes = kind === "articles" ? LEGI_FACET_ATTRIBUTES : FACET_ATTRIBUTES;
-      const hybrid =
-        mode === "hybrid" && embedder && query.trim() ? { embedder, semanticRatio: HYBRID_SEMANTIC_RATIO } : undefined;
+      const hybrid = mode === "hybrid" && embedder && query.trim() ? { embedder, semanticRatio } : undefined;
 
       const res = await client.index(index).search<SearchHit & ArticleHit>(query, {
         hybrid,
@@ -107,6 +118,10 @@ export function SearchPage() {
         cropLength: kind === "articles" ? 60 : 55,
         cropMarker: "…",
         sort: kind === "articles" ? undefined : sortParam(sort),
+        matchingStrategy,
+        // 0 is the off state: Meilisearch has no "no threshold" value, and a threshold
+        // of 0 would still be sent — omitting it says the same thing more cheaply.
+        rankingScoreThreshold: rankingScoreThreshold > 0 ? rankingScoreThreshold : undefined,
         hitsPerPage: HITS_PER_PAGE,
         page,
       });
