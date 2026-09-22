@@ -25,7 +25,7 @@ interface Props {
 }
 
 export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable }: Props) {
-  const { query, setQuery, mode, setMode, modePinned, scope } = useSearchStore();
+  const { query, setQuery, mode, setMode, scope } = useSearchStore();
   const aiOn = mode === "hybrid";
 
   return (
@@ -98,9 +98,7 @@ export function SearchBar({ totalHits, processingTimeMs, isFetching, aiAvailable
                     />
                     <TooltipContent>
                       {aiOn
-                        ? modePinned
-                          ? "Recherche hybride active : mots-clés + sens (embeddings Voyage AI). Cliquez pour revenir aux mots-clés."
-                          : "Recherche hybride activée automatiquement : votre requête ressemble à une question. Cliquez pour revenir aux mots-clés."
+                        ? "Recherche hybride active : mots-clés + sens (embeddings Voyage AI). Cliquez pour revenir aux mots-clés."
                         : "Activer la recherche hybride : combine les mots-clés et le sens de la question."}
                     </TooltipContent>
                   </Tooltip>
