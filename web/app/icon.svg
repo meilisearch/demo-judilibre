@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" rx="7" fill="#60697b"/>
+  <!-- "J" of Newsreader 500, the site's heading face, as an outline: an SVG
+       favicon cannot load a webfont, so the glyph is embedded as a path. -->
+  <path fill="#f8fafd" d="M19.51 19.03Q19.51 20.41 19.04 21.52Q18.57 22.63 17.71 23.41Q16.85 24.19 15.69 24.59Q14.52 25 13.14 25Q12.26 25 11.65 24.79Q11.04 24.58 10.73 24.2Q10.42 23.82 10.42 23.31Q10.42 22.78 10.73 22.42Q11.04 22.06 11.63 22.06Q11.88 22.06 12.17 22.27Q12.46 22.47 12.81 22.74Q13.16 23.01 13.55 23.22Q13.94 23.43 14.41 23.43Q15.4 23.43 16.01 22.69Q16.63 21.96 16.63 20.18V8.38L14.49 7.68V7H21.58V7.68L19.49 8.38Z"/>
+</svg>
