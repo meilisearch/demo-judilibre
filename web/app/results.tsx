@@ -1,12 +1,11 @@
 "use client";
 
-import { ArrowDownWideNarrow, ChevronLeft, ChevronRight, FileSearch, Landmark, ScrollText } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileSearch, Landmark, ScrollText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { type SearchScope, type SortOption, useSearchStore } from "@/lib/search-store";
+import { type SearchScope, useSearchStore } from "@/lib/search-store";
 import { FACET_ATTRIBUTES } from "@/lib/types";
 import { MobileFilters } from "@/app/mobile-filters";
 import { ArticleCard } from "@/app/article-card";
@@ -18,14 +17,8 @@ interface Props {
   loading: boolean;
 }
 
-const SORT_LABELS: Record<SortOption, string> = {
-  relevance: "Pertinence",
-  date_desc: "Plus récentes",
-  date_asc: "Plus anciennes",
-};
-
 export function Results({ result, loading }: Props) {
-  const { sort, setSort, scope, setScope, page, setPage, query, filters } = useSearchStore();
+  const { scope, setScope, page, setPage, query, filters } = useSearchStore();
   const hasCriteria = query.trim().length > 0 || Object.keys(filters).length > 0;
 
   return (
@@ -68,25 +61,6 @@ export function Results({ result, loading }: Props) {
           <p className="text-muted-foreground hidden text-xs sm:block">
             {result && result.totalPages > 0 ? `Page ${page} sur ${result.totalPages}` : " "}
           </p>
-          {scope === "articles" ? null : (
-          <Select value={sort} onValueChange={(v: string | null) => {
-              if (v) setSort(v as SortOption);
-            }}>
-            <SelectTrigger size="sm" aria-label="Trier les résultats" className="min-w-[9.5rem] max-sm:h-9 max-sm:min-w-0 max-sm:flex-1">
-              <ArrowDownWideNarrow />
-              <SelectValue>{SORT_LABELS[sort]}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {(Object.keys(SORT_LABELS) as SortOption[]).map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {SORT_LABELS[option]}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          )}
         </div>
       </div>
 
