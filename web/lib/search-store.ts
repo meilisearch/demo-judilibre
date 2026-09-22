@@ -10,20 +10,6 @@ export type SearchMode = "keyword" | "hybrid";
  */
 export type SearchScope = "articles" | "decisions";
 
-/** Above this many words, a query reads as a sentence rather than a set of keywords. */
-const NATURAL_LANGUAGE_WORDS = 5;
-
-/**
- * A question, or a query long enough to be a sentence, is better served by hybrid search:
- * the wording rarely matches the decision's own words.
- */
-export function looksNaturalLanguage(query: string): boolean {
-  const q = query.trim();
-  if (!q) return false;
-  if (q.includes("?")) return true;
-  return q.split(/\s+/).length > NATURAL_LANGUAGE_WORDS;
-}
-
 /**
  * How Meilisearch narrows a query whose every word cannot be matched: `frequency`
  * drops the most common word first, `last` drops the last one, `all` drops nothing
@@ -57,9 +43,8 @@ export type Filters = Partial<Record<FacetAttribute, string[]>>;
 interface SearchState extends SearchSettings {
   query: string;
   filters: Filters;
+  /** Hybrid by default; falls back to keywords where the index has no embedder. */
   mode: SearchMode;
-  /** The user set the mode by hand, so typing no longer changes it. */
-  modePinned: boolean;
   scope: SearchScope;
   page: number;
   setQuery: (q: string) => void;
@@ -79,18 +64,12 @@ export const useSearchStore = create<SearchState>((set) => ({
   query: "",
   filters: {},
   ...DEFAULT_SETTINGS,
-  mode: "keyword",
-  modePinned: false,
+  mode: "hybrid",
   // Codes is the first tab: the law before its application.
   scope: "articles",
   page: 1,
-  setQuery: (query) =>
-    set((state) => ({
-      query,
-      page: 1,
-      mode: state.modePinned ? state.mode : looksNaturalLanguage(query) ? "hybrid" : "keyword",
-    })),
-  setMode: (mode) => set({ mode, modePinned: true, page: 1 }),
+  setQuery: (query) => set({ query, page: 1 }),
+  setMode: (mode) => set({ mode, page: 1 }),
   setScope: (scope) => set({ scope, page: 1 }),
   toggleFilter: (attr, value) =>
     set((state) => {
