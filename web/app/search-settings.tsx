@@ -110,10 +110,15 @@ export function SearchSettings({ aiAvailable }: { aiAvailable: boolean }) {
         render={
           <Button
             size="icon"
-            variant={changed > 0 ? "default" : "outline"}
+            variant="ghost"
             title="Paramètres de recherche"
             aria-label={changed > 0 ? `Paramètres de recherche, ${changed} modifiés` : "Paramètres de recherche"}
-            className="size-12 shrink-0 rounded-xl shadow-sm [&_svg:not([class*='size-'])]:size-5"
+            // Advanced knobs: the gear sits beside the input without competing with it,
+            // and only picks up a tint once a setting has actually been moved.
+            className={cn(
+              "text-muted-foreground bg-muted/50 hover:text-foreground size-12 shrink-0 rounded-xl [&_svg:not([class*='size-'])]:size-5",
+              changed > 0 && "text-foreground bg-muted",
+            )}
           >
             <Settings />
           </Button>
