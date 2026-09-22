@@ -1,12 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { AlertCircle, ArrowUp, ChevronDown, ExternalLink, FileText, Library, Scale, Search, Square } from "lucide-react";
+import { AlertCircle, ArrowUp, ChevronDown, ExternalLink, FileText, Library, Scale, Search, SquarePen, Square } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group";
@@ -19,8 +18,8 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
-import { consumeChatStream } from "@/lib/chat-stream";
-import type { AssistantTurn, ChatMessage, SearchStep, SourceDoc, Turn } from "@/lib/chat-types";
+import { useChatStore } from "@/lib/chat-store";
+import type { AssistantTurn, SearchStep, SourceDoc } from "@/lib/chat-types";
 import { citation } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -31,93 +30,36 @@ const SUGGESTIONS = [
   "Que prévoit le code civil en matière de responsabilité du fait des choses ?",
 ];
 
-let turnSeq = 0;
-const nextId = () => `t${++turnSeq}`;
-
 export function ChatPanel() {
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const turns = useChatStore((s) => s.turns);
+  const busy = useChatStore((s) => s.busy);
+  const setupError = useChatStore((s) => s.setupError);
+  const sendMessage = useChatStore((s) => s.send);
+  const stop = useChatStore((s) => s.stop);
+  const reset = useChatStore((s) => s.reset);
   const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [setupError, setSetupError] = useState<string | null>(null);
-  const historyRef = useRef<ChatMessage[]>([]);
-  const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // False on the server and on the first client render; the saved conversation is read after mount.
+  const hydrated = useSyncExternalStore(
+    (onChange) => useChatStore.persist.onFinishHydration(onChange),
+    () => useChatStore.persist.hasHydrated(),
+    () => false,
+  );
+
+  useEffect(() => {
+    // Once per page load: rehydrating again on a later visit would overwrite a live answer.
+    if (!useChatStore.persist.hasHydrated()) void useChatStore.persist.rehydrate();
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [turns]);
 
-  const updateAssistant = useCallback((id: string, patch: (t: AssistantTurn) => AssistantTurn) => {
-    setTurns((prev) => prev.map((t) => (t.id === id && t.role === "assistant" ? patch(t) : t)));
-  }, []);
-
-  const send = useCallback(
-    async (text: string) => {
-      const content = text.trim();
-      if (!content || busy) return;
-      setInput("");
-      setSetupError(null);
-      setBusy(true);
-
-      const assistantId = nextId();
-      setTurns((prev) => [
-        ...prev,
-        { id: nextId(), role: "user", content },
-        { id: assistantId, role: "assistant", content: "", steps: [], pending: true },
-      ]);
-      historyRef.current.push({ role: "user", content });
-
-      const controller = new AbortController();
-      abortRef.current = controller;
-      let answer = "";
-      let sawAssistantMemory = false;
-
-      try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: historyRef.current }),
-          signal: controller.signal,
-        });
-        if (!res.ok) {
-          const body = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
-          const message = body.error ?? `HTTP ${res.status}`;
-          if (res.status === 503) setSetupError(`${message}${body.detail ? ` — ${body.detail}` : ""}`);
-          throw new Error(message);
-        }
-        await consumeChatStream(res, {
-          onContent: (delta) => {
-            answer += delta;
-            updateAssistant(assistantId, (t) => ({ ...t, content: t.content + delta }));
-          },
-          onStep: (step) =>
-            updateAssistant(assistantId, (t) => {
-              const idx = t.steps.findIndex((s) => s.callId === step.callId);
-              const steps = idx === -1 ? [...t.steps, step] : t.steps.map((s, i) => (i === idx ? step : s));
-              return { ...t, steps };
-            }),
-          onMemory: (message) => {
-            if (message.role === "assistant" && message.content && !message.tool_calls?.length) sawAssistantMemory = true;
-            historyRef.current.push(message);
-          },
-        });
-        if (!sawAssistantMemory && answer) historyRef.current.push({ role: "assistant", content: answer });
-        updateAssistant(assistantId, (t) => ({ ...t, pending: false }));
-      } catch (error) {
-        const aborted = error instanceof DOMException && error.name === "AbortError";
-        const message = aborted ? "Réponse interrompue." : error instanceof Error ? error.message : "Erreur inconnue";
-        if (!aborted) toast.error("L'assistant n'a pas pu répondre", { description: message });
-        if (answer) historyRef.current.push({ role: "assistant", content: answer });
-        updateAssistant(assistantId, (t) => ({ ...t, pending: false, error: message }));
-      } finally {
-        abortRef.current = null;
-        setBusy(false);
-      }
-    },
-    [busy, updateAssistant],
-  );
-
-  const stop = () => abortRef.current?.abort();
+  const send = (text: string) => {
+    if (!text.trim() || busy) return;
+    setInput("");
+    void sendMessage(text);
+  };
 
   const lastAssistant = [...turns].reverse().find((t): t is AssistantTurn => t.role === "assistant");
   const sources = dedupeSources(lastAssistant?.steps ?? []);
@@ -127,7 +69,9 @@ export function ChatPanel() {
       <section className="flex min-h-0 min-w-0 flex-col" aria-label="Conversation">
         {/* The conversation scrolls; the composer below stays put. */}
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto py-6">
-          {turns.length === 0 ? (
+          {!hydrated ? (
+            <div className="flex-1" />
+          ) : turns.length === 0 ? (
             <div className="flex flex-1 flex-col justify-center gap-6 py-10">
               <div className="flex flex-col gap-2">
                 <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">Assistant codes</p>
@@ -187,37 +131,55 @@ export function ChatPanel() {
 
         {/* The sidebar of source cards is desktop-only; on a phone the same cards
             open in a sheet, so the excerpts and attached PDFs stay reachable. */}
-        {sources.length > 0 ? (
-          <Sheet>
-            <SheetTrigger
+        {turns.length > 0 ? (
+          <div className="mb-2 flex shrink-0 items-center gap-2">
+            {sources.length > 0 ? (
+              <Sheet>
+                <SheetTrigger
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" }),
+                    "h-9 gap-1.5 lg:hidden",
+                  )}
+                >
+                  <Library data-icon="inline-start" />
+                  Sources citées
+                  <span className="font-mono text-xs tabular-nums">({sources.length})</span>
+                </SheetTrigger>
+                <SheetContent side="bottom" className="max-h-[85svh] rounded-t-2xl lg:hidden">
+                  <SheetHeader className="pr-12">
+                    <SheetTitle>Sources citées</SheetTitle>
+                    <SheetDescription>
+                      Les articles retrouvés par Meilisearch pour la dernière réponse.
+                    </SheetDescription>
+                  </SheetHeader>
+                  <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                    <SourcesList sources={sources} />
+                  </div>
+                </SheetContent>
+              </Sheet>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                reset();
+                setInput("");
+              }}
               className={cn(
-                buttonVariants({ variant: "outline", size: "sm" }),
-                "mb-2 h-9 shrink-0 gap-1.5 self-start lg:hidden",
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "text-muted-foreground ml-auto h-9 gap-1.5",
               )}
             >
-              <Library data-icon="inline-start" />
-              Sources citées
-              <span className="font-mono text-xs tabular-nums">({sources.length})</span>
-            </SheetTrigger>
-            <SheetContent side="bottom" className="max-h-[85svh] rounded-t-2xl lg:hidden">
-              <SheetHeader className="pr-12">
-                <SheetTitle>Sources citées</SheetTitle>
-                <SheetDescription>
-                  Les articles retrouvés par Meilisearch pour la dernière réponse.
-                </SheetDescription>
-              </SheetHeader>
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-                <SourcesList sources={sources} />
-              </div>
-            </SheetContent>
-          </Sheet>
+              <SquarePen data-icon="inline-start" />
+              Nouvelle conversation
+            </button>
+          </div>
         ) : null}
 
         <form
           className="shrink-0 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
           onSubmit={(e) => {
             e.preventDefault();
-            void send(input);
+            send(input);
           }}
         >
           <InputGroup className="bg-background rounded-2xl shadow-md">
@@ -227,7 +189,7 @@ export function ChatPanel() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  void send(input);
+                  send(input);
                 }
               }}
               rows={1}

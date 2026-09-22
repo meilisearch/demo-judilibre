@@ -27,11 +27,18 @@ function parseJson<T>(raw: string): T | null {
 }
 
 /**
+ * Longest excerpt kept. A source card clamps its excerpt to three lines, and the
+ * conversation is saved to sessionStorage, so full texts would only cost space.
+ */
+const EXCERPT_CHARS = 500;
+
+/**
  * Sources arrive as whole index documents, full text included. Keep only what the
  * UI renders so a conversation does not hold megabytes of decision text.
  */
 function trimSource(doc: Record<string, unknown>): SourceDoc {
   const str = (k: string) => (typeof doc[k] === "string" ? (doc[k] as string) : "");
+  const excerpt = (k: string) => str(k).slice(0, EXCERPT_CHARS);
   const arr = (k: string) => (Array.isArray(doc[k]) ? (doc[k] as unknown[]).filter((v): v is string => typeof v === "string") : []);
   const id = str("id");
   return {
@@ -43,7 +50,7 @@ function trimSource(doc: Record<string, unknown>): SourceDoc {
     decision_date: str("decision_date"),
     number: str("number"),
     solution: str("solution"),
-    summary: str("summary"),
+    summary: excerpt("summary"),
     titles: arr("titles"),
     publication: arr("publication"),
     source: str("source"),
@@ -59,11 +66,12 @@ function trimSource(doc: Record<string, unknown>): SourceDoc {
             url: f.url as string,
           }))
       : [],
-    content: str("content"),
+    content: excerpt("content"),
     code: str("code"),
     reference: str("reference"),
     section: str("section"),
-    text: str("text"),
+    // Decisions carry a `text` too: their whole judgment. Only an article's is shown.
+    text: str("code") ? excerpt("text") : "",
   };
 }
 
