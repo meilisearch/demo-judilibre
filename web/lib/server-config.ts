@@ -24,7 +24,7 @@ export const serverEnv = {
   /** Embedder name on both indexes; empty disables the hybrid-search toggle. */
   embedderName: process.env.MEILI_EMBEDDER ?? "voyage",
   chatWorkspace: process.env.CHAT_WORKSPACE ?? "judilibre",
-  chatModel: process.env.CHAT_MODEL ?? "gpt-5.5",
+  chatModel: process.env.CHAT_MODEL ?? "claude-sonnet-5-5",
   chatKey: process.env.MEILI_CHAT_KEY || process.env.MEILI_MASTER_KEY || "",
 };
 

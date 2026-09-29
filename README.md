@@ -25,7 +25,7 @@ Two indexes: `judilibre` holds one document per decision, `judilibre_chunk` hold
 | Rust toolchain | builds the indexer (`cargo`) |
 | Node 22 + pnpm | runs the web app locally |
 | **PISTE credentials** | required to call the Judilibre API. Free: create an account on <https://piste.gouv.fr>, create an application, open its **APIs** tab and subscribe it to *Judilibre* (sandbox and/or production). Then copy its `KeyId` (API-key application) into `PISTE_KEY_ID`, or its OAuth client id/secret into `PISTE_CLIENT_ID` / `PISTE_CLIENT_SECRET`. A `403` means the application is not subscribed for that environment. |
-| LLM API key | for the assistant. Default: OpenAI GPT-5.6 Luna (`CHAT_MODEL=gpt-5.6-luna`). Meilisearch also supports Mistral, Azure OpenAI, Gemini, vLLM. |
+| LLM API key | for the assistant. Default: Claude Sonnet 5.5 through the LUMEN gateway (`CHAT_SOURCE=openAi`, `CHAT_BASE_URL=https://lumen.meilisearch.com/v1`, `CHAT_MODEL=claude-sonnet-5-5`, a LUMEN virtual key in `CHAT_API_KEY`). Meilisearch also supports OpenAI, Mistral, Azure OpenAI, Gemini, vLLM. |
 | Voyage AI key (optional) | hybrid semantic search with `voyage-law-2`. |
 
 ## Quick start

@@ -69,7 +69,8 @@ handles both shapes.
 - `create_index` returns a *failed task* when the index exists; treat `index_already_exists` as success.
 - Judilibre `/export` requires `batch` alongside `batch_size`, and rejects a PISTE key with `403` until the application is subscribed to the API for that environment.
 - Meilisearch chat streams `_meiliSearchProgress` with `function_arguments` and `_meiliSearchSources` with `sources` (not `documents`). Sources are whole index documents; trim them client-side.
-- The GPT-5.6 family cannot be used for chat: it refuses function tools unless `reasoning_effort` is `none`, which Meilisearch cannot send. Default model is `gpt-5.5`.
+- The chat LLM is Claude Sonnet 5.5 (`claude-sonnet-5-5`) through the LUMEN gateway: `openAi` source with `baseUrl` `https://lumen.meilisearch.com/v1`. Use the public URL: Meilisearch rejects private IPs as a chat `baseUrl`. Switching the model of a live deployment means updating the workspace (`setup`, or `PATCH /chats/<workspace>/settings`) *and* `CHAT_MODEL`, since the web app sends the model name.
+- The GPT-5.6 family cannot be used for chat: it refuses function tools unless `reasoning_effort` is `none`, which Meilisearch cannot send. With OpenAI directly, use `gpt-5.5`.
 - Base UI `CollapsibleTrigger render={<Button/>}` causes a hydration mismatch; use `className={cn(buttonVariants(...))}` on the trigger instead.
 
 ## Conventions

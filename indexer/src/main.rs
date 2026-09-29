@@ -58,7 +58,8 @@ enum Command {
         /// API key for the LLM provider
         #[arg(long, env = "CHAT_API_KEY")]
         chat_api_key: Option<String>,
-        /// Base URL for the LLM provider (required for mistral / vLlm / azureOpenAi)
+        /// Base URL for the LLM provider (LUMEN: https://lumen.meilisearch.com/v1;
+        /// required for mistral / vLlm / azureOpenAi)
         #[arg(long, env = "CHAT_BASE_URL")]
         chat_base_url: Option<String>,
         /// Voyage AI API key for the optional hybrid-search embedder (enables semantic search)
