@@ -15,7 +15,7 @@ Meilisearch's chat completions endpoint runs the retrieval loop itself: the LLM 
 Step 4 is the one that decides the corpus. Neither the prompts nor an empty `description` keeps the assistant away from an index: the model passes an `index_uid` of its own and Meilisearch runs the search whenever the key permits it. The key's index scope is the only hard boundary. The indexes themselves are untouched — the search UI still browses the decisions, and widening the key brings them back into the chat.
 
 <Warning>
-The GPT-5.6 family (`gpt-5.6-luna`, `-sol`, `-terra`) **cannot** be used here. Those models reject function tools on `/v1/chat/completions` unless `reasoning_effort` is `"none"`, and Meilisearch only accepts `low`, `medium` or `high`. Since Meilisearch always sends its internal search tool, every request fails. The default is therefore `gpt-5.5`; `gpt-5.4-mini` is the cheaper, faster option.
+The GPT-5.6 family (`gpt-5.6-luna`, `-sol`, `-terra`) **cannot** be used here. Those models reject function tools on `/v1/chat/completions` unless `reasoning_effort` is `"none"`, and Meilisearch only accepts `low`, `medium` or `high`. Since Meilisearch always sends its internal search tool, every request fails. The default is Claude Sonnet 5.5 (`claude-sonnet-5-5`) through the LUMEN gateway; with OpenAI directly, use `gpt-5.5` or the cheaper `gpt-5.4-mini`.
 </Warning>
 
 ## Request flow

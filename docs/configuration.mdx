@@ -31,10 +31,10 @@ description: Every setting is an environment variable read from `.env` at the pr
 
 | Variable | Default | Description |
 |---|---|---|
-| `CHAT_SOURCE` | `openAi` | `openAi`, `mistral`, `azureOpenAi`, `vLlm`, `gemini` |
-| `CHAT_API_KEY` | – | Provider API key, stored in the Meilisearch chat workspace |
-| `CHAT_BASE_URL` | – | Required for `mistral` (`https://api.mistral.ai/v1`), `vLlm`, `azureOpenAi` |
-| `CHAT_MODEL` | `gpt-5.6-luna` | Model name sent by the web app (OpenAI GPT-5.6 Luna; e.g. `mistral-large-latest` with Mistral) |
+| `CHAT_SOURCE` | `openAi` | `openAi`, `mistral`, `azureOpenAi`, `vLlm`, `gemini`. LUMEN speaks the OpenAI API, so it uses `openAi` |
+| `CHAT_API_KEY` | – | Provider API key (a LUMEN virtual key by default), stored in the Meilisearch chat workspace |
+| `CHAT_BASE_URL` | `https://lumen.meilisearch.com/v1` in `.env.example` | LUMEN's public URL (Meilisearch rejects private IPs as a chat `baseUrl`). Empty for OpenAI itself; required for `mistral` (`https://api.mistral.ai/v1`), `vLlm`, `azureOpenAi` |
+| `CHAT_MODEL` | `claude-sonnet-5-5` | Model name sent by the web app (Claude Sonnet 5.5 through LUMEN; `gpt-5.5` with OpenAI directly, `mistral-large-latest` with Mistral) |
 | `CHAT_WORKSPACE` | `judilibre` | Meilisearch chat workspace |
 | `MEILI_CHAT_KEY` | – | Key with `search` + `chatCompletions` actions, printed by `setup`. Falls back to the master key |
 
