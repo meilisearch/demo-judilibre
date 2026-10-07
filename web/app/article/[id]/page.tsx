@@ -150,19 +150,22 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
             </h2>
             {decisions.length === 0 ? (
               <p className="text-muted-foreground text-sm">
-                Aucune décision indexée ne cite cet article dans ses textes appliqués.
+                Aucune décision indexée ne vise cet article dans ses textes appliqués. Seuls les visas sont rapprochés :
+                une décision qui ne fait que mentionner l&apos;article dans ses motifs n&apos;apparaît pas ici.
               </p>
             ) : (
               <>
                 <p className="text-muted-foreground text-sm">
                   {total > decisions.length
-                    ? `${total.toLocaleString("fr-FR")} décisions citent cet article ; les ${decisions.length} plus récentes :`
-                    : `${total} décision${total > 1 ? "s" : ""} cite${total > 1 ? "nt" : ""} cet article :`}
+                    ? `${total.toLocaleString("fr-FR")} décisions visent cet article ; les ${decisions.length} plus récentes :`
+                    : `${total} décision${total > 1 ? "s" : ""} vise${total > 1 ? "nt" : ""} cet article :`}
                 </p>
                 <Alert>
                   <Info />
                   <AlertDescription>
-                    Le rapprochement se fait par numéro d&apos;article, sans tenir compte de la version appliquée. Une
+                    Seuls les visas (les textes appliqués) sont rapprochés : les décisions qui ne font que mentionner
+                    l&apos;article dans leurs motifs n&apos;y figurent pas. Le rapprochement se fait par numéro
+                    d&apos;article, sans tenir compte de la version appliquée. Une
                     décision peut donc viser ce numéro « dans sa rédaction antérieure », c&apos;est-à-dire un texte
                     différent de celui affiché ci-dessus — la numérotation du code civil a notamment été modifiée par
                     l&apos;ordonnance du 10 février 2016. Vérifiez la rédaction visée dans la décision.

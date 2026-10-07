@@ -109,6 +109,23 @@ export const useSearchStore = create<SearchState>((set) => ({
   setPage: (page) => set({ page }),
 }));
 
+/**
+ * Rewrite the citation forms lawyers type into the forms the indexes hold.
+ *
+ * "L. 1152-1" is how the case law writes an article, but the index holds "L1152-1",
+ * and Meilisearch splits "L." from "1152" — so the query found every article numbered
+ * 1152-something. A pourvoi typed without punctuation ("2416592") is the number
+ * "24-16.592", which is only rewritten when it is the whole query.
+ */
+export function normalizeQuery(q: string): string {
+  const pourvoi = /^\s*(\d{2})[-\s]?(\d{2})[.\s]?(\d{3})\s*$/.exec(q);
+  if (pourvoi) return `${pourvoi[1]}-${pourvoi[2]}.${pourvoi[3]}`;
+  return q
+    .replace(/\bart\.\s*/gi, "article ")
+    .replace(/\b([LRDA])\.\s*(?=\d)/g, "$1")
+    .replace(/\b([LRDA])\s+(?=\d{3,}\b|\d+-)/g, "$1");
+}
+
 function escapeFilterValue(v: string): string {
   return `'${v.replaceAll("\\", "\\\\").replaceAll("'", "\\'")}'`;
 }

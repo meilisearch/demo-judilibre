@@ -5,7 +5,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getMeili } from "@/lib/meili-client";
-import { buildFilter, sortParam, useSearchStore } from "@/lib/search-store";
+import { buildFilter, normalizeQuery, sortParam, useSearchStore } from "@/lib/search-store";
 import {
   FACET_ATTRIBUTES,
   HL_POST,
@@ -108,7 +108,7 @@ export function SearchPage() {
       const facetAttributes = kind === "articles" ? LEGI_FACET_ATTRIBUTES : FACET_ATTRIBUTES;
       const hybrid = mode === "hybrid" && embedder && query.trim() ? { embedder, semanticRatio } : undefined;
 
-      const res = await client.index(index).search<SearchHit & ArticleHit>(query, {
+      const res = await client.index(index).search<SearchHit & ArticleHit>(normalizeQuery(query), {
         hybrid,
         filter: buildFilter(filters),
         facets: [...facetAttributes],

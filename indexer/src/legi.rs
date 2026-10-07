@@ -170,7 +170,10 @@ pub fn parse_article(xml: &str) -> Option<Article> {
         return None;
     }
 
-    let date = NaiveDate::parse_from_str(&raw.date_debut, "%Y-%m-%d").ok();
+    // The 2999 sentinel means "no date", not a year: it must not reach the year facet.
+    let date = Some(&raw.date_debut)
+        .filter(|d| d.as_str() != NO_END)
+        .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
     let section = raw.hierarchy.last().cloned().unwrap_or_default();
     Some(Article {
         reference: format!("Article {} du {}", raw.num, raw.code),
@@ -280,6 +283,15 @@ mod tests {
     }
 
     #[test]
+    fn undated_article_has_no_year() {
+        let xml = IN_FORCE.replace("<DATE_DEBUT>2022-01-01</DATE_DEBUT>", "<DATE_DEBUT>2999-01-01</DATE_DEBUT>");
+        let a = parse_article(&xml).unwrap();
+        assert_eq!(a.date_debut, "");
+        assert_eq!(a.year, 0);
+        assert_eq!(a.date_debut_timestamp, 0);
+    }
+
+    #[test]
     fn skips_superseded_versions() {
         let xml = IN_FORCE.replace("<ETAT>VIGUEUR</ETAT>", "<ETAT>MODIFIE</ETAT>");
         assert!(parse_article(&xml).is_none());
@@ -322,11 +334,15 @@ pub async fn apply_settings(meili: &crate::meili::MeiliClient, index: &str) -> R
     use serde_json::json;
     meili.create_index(index, "id").await?;
     let settings = json!({
-        "searchableAttributes": ["reference", "number", "code", "section", "hierarchy", "text"],
+        // The code's title comes last, and it is in `reference` too ("Article 122-5 du
+        // Code pénal"): ranked first, it made "état de nécessité" return the Code du
+        // domaine de l'État and "légitime défense" the Code de la défense.
+        "searchableAttributes": ["number", "text", "section", "hierarchy", "reference", "code"],
         // `id` is filterable so the article page can be fetched with a search-only key.
         "filterableAttributes": ["id", "code", "code_id", "number", "reference_key", "section", "year", "date_debut_timestamp"],
         "sortableAttributes": ["date_debut_timestamp", "code", "number"],
         "rankingRules": ["words", "typo", "proximity", "attribute", "sort", "exactness"],
+        "synonyms": crate::settings::legal_synonyms(),
         // An article number must match exactly: "L110-1" is not "L110-11".
         "typoTolerance": { "disableOnAttributes": ["number", "reference_key"] },
         "faceting": { "maxValuesPerFacet": 200 },
