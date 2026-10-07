@@ -4,6 +4,7 @@ mod judilibre;
 mod legi;
 mod refs;
 mod meili;
+mod notions;
 mod settings;
 mod transform;
 

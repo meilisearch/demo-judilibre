@@ -156,35 +156,23 @@ impl MeiliClient {
         }
     }
 
-    /// How many documents carry each value of a string or string-array field,
-    /// read page by page. Facet counts would do it in one call, but they stop at
-    /// `maxValuesPerFacet` values.
-    pub async fn field_value_counts(&self, uid: &str, field: &str) -> Result<std::collections::HashMap<String, u64>> {
+    /// Every document of an index, reduced to the given fields, read page by page.
+    pub async fn fetch_fields(&self, uid: &str, fields: &[&str]) -> Result<Vec<Value>> {
         const PAGE: usize = 5000;
-        let mut counts = std::collections::HashMap::new();
-        let mut offset = 0;
+        let mut all = Vec::new();
         loop {
             let page: Value = self
                 .send_json(
                     self.request(Method::POST, &format!("/indexes/{uid}/documents/fetch"))
-                        .json(&json!({ "offset": offset, "limit": PAGE, "fields": [field] })),
+                        .json(&json!({ "offset": all.len(), "limit": PAGE, "fields": fields })),
                 )
                 .await?;
             let docs = page["results"].as_array().cloned().unwrap_or_default();
-            for doc in &docs {
-                let values = match &doc[field] {
-                    Value::Array(a) => a.iter().filter_map(Value::as_str).collect(),
-                    Value::String(s) => vec![s.as_str()],
-                    _ => vec![],
-                };
-                for v in values {
-                    *counts.entry(v.to_string()).or_insert(0) += 1;
-                }
+            let done = docs.len() < PAGE;
+            all.extend(docs);
+            if done {
+                return Ok(all);
             }
-            if docs.len() < PAGE {
-                return Ok(counts);
-            }
-            offset += docs.len();
         }
     }
 

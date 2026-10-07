@@ -59,6 +59,10 @@ pub struct Article {
     /// `reference_key`). A ranking tie-breaker, filled in at indexing time.
     #[serde(default)]
     pub cited_by: u64,
+    /// What the decisions applying it call it ("vices cachés", "légitime défense"),
+    /// from their titrage. Searchable, not embedded. Filled in at indexing time.
+    #[serde(default)]
+    pub notions: Vec<String>,
 }
 
 impl Article {
@@ -196,6 +200,7 @@ pub fn parse_article(xml: &str) -> Option<Article> {
         code: raw.code,
         code_id: raw.code_id,
         cited_by: 0,
+        notions: Vec::new(),
         section,
         hierarchy: raw.hierarchy,
     })
@@ -343,7 +348,10 @@ pub async fn apply_settings(meili: &crate::meili::MeiliClient, index: &str) -> R
         // the dozens whose text cites "article 1240 du code civil". The bare code title
         // goes last, where "état" or "défense" matching a code's name no longer
         // outranks a match in the text.
-        "searchableAttributes": ["reference", "number", "text", "section", "hierarchy", "code"],
+        // `notions` (the case law's names for the article) comes right after the text:
+        // placed before it, it won the known misses but lost held-out queries such as
+        // "dol" to articles merely sharing a notion.
+        "searchableAttributes": ["reference", "number", "text", "notions", "section", "hierarchy", "code"],
         // `id` is filterable so the article page can be fetched with a search-only key.
         "filterableAttributes": ["id", "code", "code_id", "number", "reference_key", "section", "year", "date_debut_timestamp", "cited_by"],
         "sortableAttributes": ["date_debut_timestamp", "code", "number", "cited_by"],
@@ -420,17 +428,19 @@ pub async fn run(
     if !batch.is_empty() {
         batches.push(batch);
     }
-    // Index the decisions first: an article is ranked by how many of them apply it.
-    let cites = match meili.field_value_counts(decisions_index, "visa_refs").await {
-        Ok(c) => c,
+    // Index the decisions first: an article is ranked by how many of them apply it,
+    // and found by the names their titrage gives it (see notions.rs).
+    let law = match meili.fetch_fields(decisions_index, &["visa_refs", "titles", "themes"]).await {
+        Ok(decisions) => crate::notions::from_decisions(&decisions),
         Err(e) => {
-            warn!(error = %e, decisions_index, "cannot count citing decisions; cited_by stays 0");
+            warn!(error = %e, decisions_index, "cannot read the decisions; cited_by and notions stay empty");
             Default::default()
         }
     };
-    info!(articles_cited = cites.len(), "decisions counted per article");
+    info!(articles_cited = law.cited_by.len(), with_notions = law.notions.len(), "case law joined to articles");
     for article in batches.iter_mut().flatten() {
-        article.cited_by = cites.get(&article.reference_key).copied().unwrap_or(0);
+        article.cited_by = law.cited_by.get(&article.reference_key).copied().unwrap_or(0);
+        article.notions = law.notions.get(&article.reference_key).cloned().unwrap_or_default();
     }
     let mut last_task = None;
     for (i, b) in batches.iter().enumerate() {
