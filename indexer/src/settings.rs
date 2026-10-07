@@ -96,6 +96,9 @@ pub async fn apply_index_settings(meili: &MeiliClient, index: &str) -> Result<()
     meili.update_settings(index, &settings).await
 }
 
+/// Voyage AI's own embeddings endpoint, the default target of the embedder.
+pub const VOYAGE_URL: &str = "https://api.voyageai.com/v1/embeddings";
+
 /// Name of the embedder configured on the index (referenced by hybrid search).
 pub const EMBEDDER_NAME: &str = "voyage";
 
@@ -141,6 +144,7 @@ pub async fn apply_voyage_embedder(
     meili: &MeiliClient,
     index: &str,
     api_key: &str,
+    url: &str,
     model: &str,
     kind: EmbedderKind,
 ) -> Result<()> {
@@ -148,7 +152,7 @@ pub async fn apply_voyage_embedder(
     let embedders = json!({
         EMBEDDER_NAME: {
             "source": "rest",
-            "url": "https://api.voyageai.com/v1/embeddings",
+            "url": url,
             "apiKey": api_key,
             "dimensions": 1024,
             "request": {
