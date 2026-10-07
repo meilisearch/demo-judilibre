@@ -17,7 +17,7 @@ use chrono::NaiveDate;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::refs::reference_key;
 use crate::transform::strip_html;
@@ -55,6 +55,10 @@ pub struct Article {
     pub date_debut_timestamp: i64,
     pub year: i32,
     pub url: String,
+    /// Decisions whose visa applies this article (their `visa_refs` hold its
+    /// `reference_key`). A ranking tie-breaker, filled in at indexing time.
+    #[serde(default)]
+    pub cited_by: u64,
 }
 
 impl Article {
@@ -191,6 +195,7 @@ pub fn parse_article(xml: &str) -> Option<Article> {
         number: raw.num,
         code: raw.code,
         code_id: raw.code_id,
+        cited_by: 0,
         section,
         hierarchy: raw.hierarchy,
     })
@@ -334,14 +339,17 @@ pub async fn apply_settings(meili: &crate::meili::MeiliClient, index: &str) -> R
     use serde_json::json;
     meili.create_index(index, "id").await?;
     let settings = json!({
-        // The code's title comes last, and it is in `reference` too ("Article 122-5 du
-        // Code pénal"): ranked first, it made "état de nécessité" return the Code du
-        // domaine de l'État and "légitime défense" the Code de la défense.
-        "searchableAttributes": ["number", "text", "section", "hierarchy", "reference", "code"],
+        // `reference` stays first: "article 1240 code civil" must find the article, not
+        // the dozens whose text cites "article 1240 du code civil". The bare code title
+        // goes last, where "état" or "défense" matching a code's name no longer
+        // outranks a match in the text.
+        "searchableAttributes": ["reference", "number", "text", "section", "hierarchy", "code"],
         // `id` is filterable so the article page can be fetched with a search-only key.
-        "filterableAttributes": ["id", "code", "code_id", "number", "reference_key", "section", "year", "date_debut_timestamp"],
-        "sortableAttributes": ["date_debut_timestamp", "code", "number"],
-        "rankingRules": ["words", "typo", "proximity", "attribute", "sort", "exactness"],
+        "filterableAttributes": ["id", "code", "code_id", "number", "reference_key", "section", "year", "date_debut_timestamp", "cited_by"],
+        "sortableAttributes": ["date_debut_timestamp", "code", "number", "cited_by"],
+        // Between equally good matches, the article the case law applies most wins:
+        // Code pénal 122-5 before the Code de la défense's own "légitime défense".
+        "rankingRules": ["words", "typo", "proximity", "attribute", "sort", "cited_by:desc", "exactness"],
         "synonyms": crate::settings::legal_synonyms(),
         // An article number must match exactly: "L110-1" is not "L110-11".
         "typoTolerance": { "disableOnAttributes": ["number", "reference_key"] },
@@ -358,6 +366,7 @@ pub async fn apply_settings(meili: &crate::meili::MeiliClient, index: &str) -> R
 pub async fn run(
     meili: &crate::meili::MeiliClient,
     index: &str,
+    decisions_index: &str,
     archive: &Path,
     out: Option<&Path>,
     limit: Option<usize>,
@@ -410,6 +419,18 @@ pub async fn run(
 
     if !batch.is_empty() {
         batches.push(batch);
+    }
+    // Index the decisions first: an article is ranked by how many of them apply it.
+    let cites = match meili.field_value_counts(decisions_index, "visa_refs").await {
+        Ok(c) => c,
+        Err(e) => {
+            warn!(error = %e, decisions_index, "cannot count citing decisions; cited_by stays 0");
+            Default::default()
+        }
+    };
+    info!(articles_cited = cites.len(), "decisions counted per article");
+    for article in batches.iter_mut().flatten() {
+        article.cited_by = cites.get(&article.reference_key).copied().unwrap_or(0);
     }
     let mut last_task = None;
     for (i, b) in batches.iter().enumerate() {

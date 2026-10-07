@@ -30,10 +30,11 @@ const ABBREVIATIONS: &[(&str, &str)] = &[
 
 /// Wordings that mean the same thing, matched both ways. The doctrine names a
 /// rule ("vice caché", "prescription quinquennale") that the code states in
-/// other words ("défauts cachés", "se prescrivent par cinq ans").
+/// other words ("défauts cachés", "se prescrivent par cinq ans"). Meilisearch
+/// does not stem, so singular and plural are listed apiece: article 1641 says
+/// "défauts cachés", which "défaut caché" alone never reached.
 const EQUIVALENTS: &[&[&str]] = &[
-    &["vice caché", "défaut caché"],
-    &["vices cachés", "défauts cachés"],
+    &["vice caché", "vices cachés", "défaut caché", "défauts cachés"],
     &["quinquennale", "cinq ans"],
     &["décennale", "dix ans"],
     &["biennale", "deux ans"],
@@ -337,8 +338,8 @@ mod tests {
         let syn = legal_synonyms();
         assert_eq!(syn["cpc"], json!(["code de procédure civile"]));
         assert!(syn.get("code de procédure civile").is_none());
-        assert_eq!(syn["vice caché"], json!(["défaut caché"]));
-        assert_eq!(syn["défaut caché"], json!(["vice caché"]));
+        assert_eq!(syn["vice caché"], json!(["vices cachés", "défaut caché", "défauts cachés"]));
+        assert_eq!(syn["défauts cachés"], json!(["vice caché", "vices cachés", "défaut caché"]));
         // "qpc" is both an abbreviation and one half of an equivalence: listed once.
         assert_eq!(syn["qpc"], json!(["question prioritaire de constitutionnalité"]));
         assert_eq!(syn["question prioritaire de constitutionnalité"], json!(["qpc"]));

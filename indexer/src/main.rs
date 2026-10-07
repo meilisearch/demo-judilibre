@@ -237,7 +237,7 @@ async fn main() -> Result<()> {
         }
 
         Command::Legi { archive, out, limit } => {
-            let stats = legi::run(&meili, &legi_index, &archive, out.as_deref(), limit).await?;
+            let stats = legi::run(&meili, &legi_index, &cli.index, &archive, out.as_deref(), limit).await?;
             info!(seen = stats.seen, kept = stats.kept, "legi finished");
         }
 

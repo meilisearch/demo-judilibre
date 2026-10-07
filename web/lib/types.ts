@@ -77,6 +77,8 @@ export interface Article {
   date_debut_timestamp: number;
   year: number;
   url: string;
+  /** Decisions whose visa applies this article; a ranking tie-breaker. */
+  cited_by: number;
 }
 
 export interface ArticleFormatted {

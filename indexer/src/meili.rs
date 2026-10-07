@@ -156,6 +156,38 @@ impl MeiliClient {
         }
     }
 
+    /// How many documents carry each value of a string or string-array field,
+    /// read page by page. Facet counts would do it in one call, but they stop at
+    /// `maxValuesPerFacet` values.
+    pub async fn field_value_counts(&self, uid: &str, field: &str) -> Result<std::collections::HashMap<String, u64>> {
+        const PAGE: usize = 5000;
+        let mut counts = std::collections::HashMap::new();
+        let mut offset = 0;
+        loop {
+            let page: Value = self
+                .send_json(
+                    self.request(Method::POST, &format!("/indexes/{uid}/documents/fetch"))
+                        .json(&json!({ "offset": offset, "limit": PAGE, "fields": [field] })),
+                )
+                .await?;
+            let docs = page["results"].as_array().cloned().unwrap_or_default();
+            for doc in &docs {
+                let values = match &doc[field] {
+                    Value::Array(a) => a.iter().filter_map(Value::as_str).collect(),
+                    Value::String(s) => vec![s.as_str()],
+                    _ => vec![],
+                };
+                for v in values {
+                    *counts.entry(v.to_string()).or_insert(0) += 1;
+                }
+            }
+            if docs.len() < PAGE {
+                return Ok(counts);
+            }
+            offset += docs.len();
+        }
+    }
+
     pub async fn delete_document(&self, uid: &str, id: &str) -> Result<u64> {
         let task: TaskRef = self
             .send_json(self.request(Method::DELETE, &format!("/indexes/{uid}/documents/{id}")))
