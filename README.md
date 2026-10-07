@@ -91,7 +91,7 @@ Only `web/` is deployed. The deployed app runs on two scoped Meilisearch keys an
 cd web && vercel deploy --prod
 ```
 
-Live demo: <https://demo-judilibre.vercel.app>
+Live demo: <https://judilibre.meilisearch.com>
 
 ## Docs
 
