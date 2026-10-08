@@ -156,6 +156,26 @@ impl MeiliClient {
         }
     }
 
+    /// Every document of an index, reduced to the given fields, read page by page.
+    pub async fn fetch_fields(&self, uid: &str, fields: &[&str]) -> Result<Vec<Value>> {
+        const PAGE: usize = 5000;
+        let mut all = Vec::new();
+        loop {
+            let page: Value = self
+                .send_json(
+                    self.request(Method::POST, &format!("/indexes/{uid}/documents/fetch"))
+                        .json(&json!({ "offset": all.len(), "limit": PAGE, "fields": fields })),
+                )
+                .await?;
+            let docs = page["results"].as_array().cloned().unwrap_or_default();
+            let done = docs.len() < PAGE;
+            all.extend(docs);
+            if done {
+                return Ok(all);
+            }
+        }
+    }
+
     pub async fn delete_document(&self, uid: &str, id: &str) -> Result<u64> {
         let task: TaskRef = self
             .send_json(self.request(Method::DELETE, &format!("/indexes/{uid}/documents/{id}")))

@@ -17,7 +17,7 @@ use chrono::NaiveDate;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::refs::reference_key;
 use crate::transform::strip_html;
@@ -55,6 +55,14 @@ pub struct Article {
     pub date_debut_timestamp: i64,
     pub year: i32,
     pub url: String,
+    /// Decisions whose visa applies this article (their `visa_refs` hold its
+    /// `reference_key`). A ranking tie-breaker, filled in at indexing time.
+    #[serde(default)]
+    pub cited_by: u64,
+    /// What the decisions applying it call it ("vices cachés", "légitime défense"),
+    /// from their titrage. Searchable, not embedded. Filled in at indexing time.
+    #[serde(default)]
+    pub notions: Vec<String>,
 }
 
 impl Article {
@@ -170,7 +178,10 @@ pub fn parse_article(xml: &str) -> Option<Article> {
         return None;
     }
 
-    let date = NaiveDate::parse_from_str(&raw.date_debut, "%Y-%m-%d").ok();
+    // The 2999 sentinel means "no date", not a year: it must not reach the year facet.
+    let date = Some(&raw.date_debut)
+        .filter(|d| d.as_str() != NO_END)
+        .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
     let section = raw.hierarchy.last().cloned().unwrap_or_default();
     Some(Article {
         reference: format!("Article {} du {}", raw.num, raw.code),
@@ -188,6 +199,8 @@ pub fn parse_article(xml: &str) -> Option<Article> {
         number: raw.num,
         code: raw.code,
         code_id: raw.code_id,
+        cited_by: 0,
+        notions: Vec::new(),
         section,
         hierarchy: raw.hierarchy,
     })
@@ -280,6 +293,15 @@ mod tests {
     }
 
     #[test]
+    fn undated_article_has_no_year() {
+        let xml = IN_FORCE.replace("<DATE_DEBUT>2022-01-01</DATE_DEBUT>", "<DATE_DEBUT>2999-01-01</DATE_DEBUT>");
+        let a = parse_article(&xml).unwrap();
+        assert_eq!(a.date_debut, "");
+        assert_eq!(a.year, 0);
+        assert_eq!(a.date_debut_timestamp, 0);
+    }
+
+    #[test]
     fn skips_superseded_versions() {
         let xml = IN_FORCE.replace("<ETAT>VIGUEUR</ETAT>", "<ETAT>MODIFIE</ETAT>");
         assert!(parse_article(&xml).is_none());
@@ -322,11 +344,21 @@ pub async fn apply_settings(meili: &crate::meili::MeiliClient, index: &str) -> R
     use serde_json::json;
     meili.create_index(index, "id").await?;
     let settings = json!({
-        "searchableAttributes": ["reference", "number", "code", "section", "hierarchy", "text"],
+        // `reference` stays first: "article 1240 code civil" must find the article, not
+        // the dozens whose text cites "article 1240 du code civil". The bare code title
+        // goes last, where "état" or "défense" matching a code's name no longer
+        // outranks a match in the text.
+        // `notions` (the case law's names for the article) comes right after the text:
+        // placed before it, it won the known misses but lost held-out queries such as
+        // "dol" to articles merely sharing a notion.
+        "searchableAttributes": ["reference", "number", "text", "notions", "section", "hierarchy", "code"],
         // `id` is filterable so the article page can be fetched with a search-only key.
-        "filterableAttributes": ["id", "code", "code_id", "number", "reference_key", "section", "year", "date_debut_timestamp"],
-        "sortableAttributes": ["date_debut_timestamp", "code", "number"],
-        "rankingRules": ["words", "typo", "proximity", "attribute", "sort", "exactness"],
+        "filterableAttributes": ["id", "code", "code_id", "number", "reference_key", "section", "year", "date_debut_timestamp", "cited_by"],
+        "sortableAttributes": ["date_debut_timestamp", "code", "number", "cited_by"],
+        // Between equally good matches, the article the case law applies most wins:
+        // Code pénal 122-5 before the Code de la défense's own "légitime défense".
+        "rankingRules": ["words", "typo", "proximity", "attribute", "sort", "cited_by:desc", "exactness"],
+        "synonyms": crate::settings::legal_synonyms(),
         // An article number must match exactly: "L110-1" is not "L110-11".
         "typoTolerance": { "disableOnAttributes": ["number", "reference_key"] },
         "faceting": { "maxValuesPerFacet": 200 },
@@ -342,6 +374,7 @@ pub async fn apply_settings(meili: &crate::meili::MeiliClient, index: &str) -> R
 pub async fn run(
     meili: &crate::meili::MeiliClient,
     index: &str,
+    decisions_index: &str,
     archive: &Path,
     out: Option<&Path>,
     limit: Option<usize>,
@@ -394,6 +427,20 @@ pub async fn run(
 
     if !batch.is_empty() {
         batches.push(batch);
+    }
+    // Index the decisions first: an article is ranked by how many of them apply it,
+    // and found by the names their titrage gives it (see notions.rs).
+    let law = match meili.fetch_fields(decisions_index, &["visa_refs", "titles", "themes"]).await {
+        Ok(decisions) => crate::notions::from_decisions(&decisions),
+        Err(e) => {
+            warn!(error = %e, decisions_index, "cannot read the decisions; cited_by and notions stay empty");
+            Default::default()
+        }
+    };
+    info!(articles_cited = law.cited_by.len(), with_notions = law.notions.len(), "case law joined to articles");
+    for article in batches.iter_mut().flatten() {
+        article.cited_by = law.cited_by.get(&article.reference_key).copied().unwrap_or(0);
+        article.notions = law.notions.get(&article.reference_key).cloned().unwrap_or_default();
     }
     let mut last_task = None;
     for (i, b) in batches.iter().enumerate() {

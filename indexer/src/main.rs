@@ -4,6 +4,7 @@ mod judilibre;
 mod legi;
 mod refs;
 mod meili;
+mod notions;
 mod settings;
 mod transform;
 
@@ -68,6 +69,12 @@ enum Command {
         /// Voyage AI embedding model (voyage-law-2 is tuned for legal text; voyage-4 is the general model)
         #[arg(long, env = "VOYAGE_MODEL", default_value = "voyage-law-2")]
         voyage_model: String,
+        /// Embeddings endpoint Meilisearch calls. Voyage's own API by default; any
+        /// endpoint speaking its request shape works, e.g. LUMEN
+        /// (https://lumen.meilisearch.com/v1/embeddings, with a LUMEN key in VOYAGE_API_KEY).
+        /// Changing it makes Meilisearch re-embed every document.
+        #[arg(long, env = "VOYAGE_URL", default_value = settings::VOYAGE_URL)]
+        voyage_url: String,
         /// Skip chat configuration (search only)
         #[arg(long)]
         no_chat: bool,
@@ -193,6 +200,7 @@ async fn main() -> Result<()> {
             chat_base_url,
             voyage_api_key,
             voyage_model,
+            voyage_url,
             no_chat,
         } => {
             settings::apply_index_settings(&meili, &cli.index).await?;
@@ -201,9 +209,9 @@ async fn main() -> Result<()> {
             let embedder = match non_empty(voyage_api_key.as_deref()) {
                 Some(key) => {
                     use settings::EmbedderKind;
-                    settings::apply_voyage_embedder(&meili, &cli.index, key, &voyage_model, EmbedderKind::Decision).await?;
-                    settings::apply_voyage_embedder(&meili, &chunk_index, key, &voyage_model, EmbedderKind::Chunk).await?;
-                    settings::apply_voyage_embedder(&meili, &legi_index, key, &voyage_model, EmbedderKind::Article).await?;
+                    settings::apply_voyage_embedder(&meili, &cli.index, key, &voyage_url, &voyage_model, EmbedderKind::Decision).await?;
+                    settings::apply_voyage_embedder(&meili, &chunk_index, key, &voyage_url, &voyage_model, EmbedderKind::Chunk).await?;
+                    settings::apply_voyage_embedder(&meili, &legi_index, key, &voyage_url, &voyage_model, EmbedderKind::Article).await?;
                     Some(settings::EMBEDDER_NAME.to_string())
                 }
                 None => {
@@ -237,7 +245,7 @@ async fn main() -> Result<()> {
         }
 
         Command::Legi { archive, out, limit } => {
-            let stats = legi::run(&meili, &legi_index, &archive, out.as_deref(), limit).await?;
+            let stats = legi::run(&meili, &legi_index, &cli.index, &archive, out.as_deref(), limit).await?;
             info!(seen = stats.seen, kept = stats.kept, "legi finished");
         }
 

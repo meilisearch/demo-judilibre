@@ -6,6 +6,62 @@ use tracing::info;
 
 use crate::meili::MeiliClient;
 
+/// Abbreviations a lawyer types, expanded one way to the wording the texts use:
+/// "cpc" should find the Code de procédure civile, but the code's name should not
+/// bring back every article that merely spells "cpc".
+const ABBREVIATIONS: &[(&str, &str)] = &[
+    ("cpc", "code de procédure civile"),
+    ("cpp", "code de procédure pénale"),
+    ("cgi", "code général des impôts"),
+    ("csp", "code de la santé publique"),
+    ("css", "code de la sécurité sociale"),
+    ("cch", "code de la construction et de l'habitation"),
+    ("cpce", "code des procédures civiles d'exécution"),
+    ("cja", "code de justice administrative"),
+    ("ceseda", "code de l'entrée et du séjour des étrangers et du droit d'asile"),
+    ("cgct", "code général des collectivités territoriales"),
+    ("smic", "salaire minimum interprofessionnel de croissance"),
+    ("cdi", "contrat de travail à durée indéterminée"),
+    ("cdd", "contrat de travail à durée déterminée"),
+    ("pacs", "pacte civil de solidarité"),
+    ("qpc", "question prioritaire de constitutionnalité"),
+    ("cedh", "convention de sauvegarde des droits de l'homme"),
+];
+
+/// Wordings that mean the same thing, matched both ways. The doctrine names a
+/// rule ("vice caché", "prescription quinquennale") that the code states in
+/// other words ("défauts cachés", "se prescrivent par cinq ans"). Meilisearch
+/// does not stem, so singular and plural are listed apiece: article 1641 says
+/// "défauts cachés", which "défaut caché" alone never reached.
+const EQUIVALENTS: &[&[&str]] = &[
+    &["vice caché", "vices cachés", "défaut caché", "défauts cachés"],
+    &["quinquennale", "cinq ans"],
+    &["décennale", "dix ans"],
+    &["biennale", "deux ans"],
+    &["triennale", "trois ans"],
+    &["trentenaire", "trente ans"],
+    &["question prioritaire de constitutionnalité", "qpc"],
+];
+
+/// Synonyms shared by the decision and article indexes.
+pub fn legal_synonyms() -> serde_json::Value {
+    let mut map: std::collections::BTreeMap<&str, Vec<&str>> = std::collections::BTreeMap::new();
+    for (abbr, expansion) in ABBREVIATIONS {
+        map.entry(abbr).or_default().push(expansion);
+    }
+    for group in EQUIVALENTS {
+        for word in *group {
+            let entry = map.entry(word).or_default();
+            for other in group.iter().filter(|o| *o != word) {
+                if !entry.contains(other) {
+                    entry.push(other);
+                }
+            }
+        }
+    }
+    json!(map)
+}
+
 pub async fn apply_index_settings(meili: &MeiliClient, index: &str) -> Result<()> {
     meili.create_index(index, "id").await?;
     let settings = json!({
@@ -25,6 +81,7 @@ pub async fn apply_index_settings(meili: &MeiliClient, index: &str) -> Result<()
         ],
         "sortableAttributes": ["decision_timestamp"],
         "rankingRules": ["words", "typo", "proximity", "attribute", "sort", "exactness"],
+        "synonyms": legal_synonyms(),
         "typoTolerance": {
             "disableOnAttributes": ["number", "numbers", "ecli"]
         },
@@ -38,6 +95,9 @@ pub async fn apply_index_settings(meili: &MeiliClient, index: &str) -> Result<()
     info!(index, "applying index settings");
     meili.update_settings(index, &settings).await
 }
+
+/// Voyage AI's own embeddings endpoint, the default target of the embedder.
+pub const VOYAGE_URL: &str = "https://api.voyageai.com/v1/embeddings";
 
 /// Name of the embedder configured on the index (referenced by hybrid search).
 pub const EMBEDDER_NAME: &str = "voyage";
@@ -84,6 +144,7 @@ pub async fn apply_voyage_embedder(
     meili: &MeiliClient,
     index: &str,
     api_key: &str,
+    url: &str,
     model: &str,
     kind: EmbedderKind,
 ) -> Result<()> {
@@ -91,7 +152,7 @@ pub async fn apply_voyage_embedder(
     let embedders = json!({
         EMBEDDER_NAME: {
             "source": "rest",
-            "url": "https://api.voyageai.com/v1/embeddings",
+            "url": url,
             "apiKey": api_key,
             "dimensions": 1024,
             "request": {
@@ -271,3 +332,20 @@ Titrage : {{doc.titles}}\n\
 Sommaire : {{doc.summary}}\n\
 Textes appliqués : {{doc.visa}}\n\
 Motivations et dispositif : {{doc.excerpt}}";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn abbreviations_expand_one_way_and_equivalents_both_ways() {
+        let syn = legal_synonyms();
+        assert_eq!(syn["cpc"], json!(["code de procédure civile"]));
+        assert!(syn.get("code de procédure civile").is_none());
+        assert_eq!(syn["vice caché"], json!(["vices cachés", "défaut caché", "défauts cachés"]));
+        assert_eq!(syn["défauts cachés"], json!(["vice caché", "vices cachés", "défaut caché"]));
+        // "qpc" is both an abbreviation and one half of an equivalence: listed once.
+        assert_eq!(syn["qpc"], json!(["question prioritaire de constitutionnalité"]));
+        assert_eq!(syn["question prioritaire de constitutionnalité"], json!(["qpc"]));
+    }
+}
